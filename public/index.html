@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LetsTalk — Practice Languages with Real People</title>
+    <meta name="description" content="Join live voice and text chat rooms to practice any language. Connect with native speakers worldwide.">
+    <link rel="icon" href="./assets/logo.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ========== NAVBAR ========== -->
+    <nav id="navbar" class="navbar">
+        <div class="nav-inner">
+            <a href="#" class="nav-brand" onclick="exitRoomView()">
+                <img src="./assets/logo.png" alt="LetsTalk" class="brand-logo">
+                <span class="brand-text">Lets<span class="accent">Talk</span></span>
+            </a>
+            <div class="nav-search-wrap" id="nav-search-wrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="nav-search" placeholder="Search by topic & username" autocomplete="off">
+            </div>
+            <!-- Theme toggle -->
+            <button class="nav-theme-btn" id="nav-theme-btn" title="Toggle Dark/Light Mode">
+                <svg id="theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg id="theme-icon-dark" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            </button>
+            <!-- Logged-out nav -->
+            <div class="nav-actions" id="nav-actions-guest">
+                <button class="btn btn-ghost" id="btn-login">Log In</button>
+                <button class="btn btn-accent" id="btn-signup">Sign Up Free</button>
+            </div>
+            <!-- Logged-in nav -->
+            <div class="nav-actions nav-actions-user hidden" id="nav-actions-user">
+                <div class="nav-user-trigger" id="nav-user-trigger">
+                    <div class="nav-user-avatar" id="nav-user-avatar">U</div>
+                    <span class="nav-username" id="nav-username">User</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <!-- User Dropdown Menu -->
+                <div class="user-dropdown hidden" id="user-dropdown">
+                    <div class="dropdown-header">
+                        <div class="dropdown-avatar" id="dropdown-avatar">U</div>
+                        <div class="dropdown-user-info">
+                            <span class="dropdown-id" id="dropdown-id">ID: —</span>
+                            <span class="dropdown-name" id="dropdown-name">Name</span>
+                            <span class="dropdown-email" id="dropdown-email">email@example.com</span>
+                        </div>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" id="dropdown-profile">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        My Profile
+                    </button>
+                    <button class="dropdown-item" id="dropdown-settings">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        Profile Settings
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item dropdown-danger" id="dropdown-delete">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Delete Account
+                    </button>
+                    <button class="dropdown-item dropdown-danger" id="dropdown-logout">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+            <button class="hamburger" id="hamburger" aria-label="Toggle navigation">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ========== CONNECTION STATUS ========== -->
+    <div class="connection-status hidden" id="connection-status">
+        <span class="connection-dot"></span>
+        <span class="connection-text">Reconnecting...</span>
+    </div>
+
+    <!-- ========== MAIN VIEW (HOME) ========== -->
+    <main id="home-view">
+        <!-- HERO -->
+        <header class="hero" id="hero">
+            <div class="hero-bg-effects">
+                <div class="orb orb-1"></div>
+                <div class="orb orb-2"></div>
+                <div class="orb orb-3"></div>
+            </div>
+            <div class="hero-inner">
+                <div class="hero-content">
+                    <h1>Talk. Learn.<br><span class="text-gradient">Connect.</span></h1>
+                    <p class="hero-subtitle">Join live voice & text chat rooms to practice any language. Connect with native speakers worldwide. No textbooks — just real conversations.</p>
+                    <div class="hero-buttons">
+                        <button class="btn btn-primary btn-lg" id="hero-create-room">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                            Create a Room
+                        </button>
+                        <button class="btn btn-outline btn-lg" id="hero-explore">Explore Rooms</button>
+                    </div>
+                </div>
+                <div class="hero-visual">
+                    <img src="./assets/hero.png" alt="Global language community" class="hero-image">
+                </div>
+            </div>
+        </header>
+
+        <!-- LANGUAGE FILTERS -->
+        <section id="rooms" class="rooms-section">
+            <div class="container">
+                <div class="lang-filter-bar" id="lang-filter-bar">
+                    <button class="lang-filter-toggle" id="lang-filter-toggle">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        <span>Expand</span>
+                    </button>
+                    <div class="lang-filter-tags" id="lang-filter-tags"></div>
+                </div>
+                <div class="rooms-grid" id="rooms-grid"></div>
+                <div class="rooms-cta">
+                    <button class="btn btn-primary" id="btn-create-room">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                        Create a Room
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- FEATURES -->
+        <section id="features" class="features-section">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-badge">Why LetsTalk</div>
+                    <h2>Everything you need to become fluent</h2>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card feature-card-large">
+                        <div class="feature-icon-wrap voice">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                        </div>
+                        <h3>Live Voice & Video Rooms</h3>
+                        <p>Practice speaking in real-time with native speakers. Drop into ongoing conversations or start your own room.</p>
+                        <div class="feature-tag">Most Popular</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon-wrap text">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </div>
+                        <h3>Rich Text Chat</h3>
+                        <p>Send emojis, GIFs, stickers, images & translate messages in every room.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon-wrap match">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <h3>Smart Matching</h3>
+                        <p>Get paired with native speakers who want to learn your language.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon-wrap progress">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                        <h3>Room Apps</h3>
+                        <p>Play YouTube, Chess, use Whiteboard, Pomodoro timer & more — all inside rooms.</p>
+                    </div>
+                    <div class="feature-card feature-card-large">
+                        <div class="feature-icon-wrap community">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        </div>
+                        <h3>Global Community</h3>
+                        <p>Join a thriving community of language enthusiasts from 190+ countries. Make friends and experience cultures firsthand.</p>
+                        <div class="feature-tag">Community Favorite</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ SECTION -->
+        <section id="faq" class="faq-section">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-badge">FAQ</div>
+                    <h2>Frequently Asked Questions</h2>
+                    <p>Everything you need to know about LetsTalk</p>
+                </div>
+                <div class="faq-list" id="faq-list">
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>What is LetsTalk?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="faq-answer"><p>LetsTalk is a free platform where you can practice languages by joining live voice and text chat rooms with native speakers from around the world. No textbooks, just real conversations.</p></div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>Is LetsTalk free to use?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="faq-answer"><p>Yes! LetsTalk is completely free. Create rooms, join conversations, share media, and use all features at no cost.</p></div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>How do voice and video rooms work?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="faq-answer"><p>Rooms use WebRTC for peer-to-peer audio and video. Join a room, click the microphone to start talking, and toggle your camera for video chat. You can also share your screen.</p></div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>What languages are supported?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="faq-answer"><p>We support 18+ languages including English, Spanish, Japanese, French, Korean, German, Portuguese, Chinese, Hindi, Arabic, and more. You can also select "Other" for any language not listed.</p></div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>Can I use apps inside rooms?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="faq-answer"><p>Yes! Each room has built-in apps including YouTube player, Pomodoro timer, Todo list, Chess, Document viewer, and a collaborative Whiteboard — perfect for study groups and tutoring.</p></div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>What are the different roles in a room?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="faq-answer"><p><strong>Owner</strong> — The room creator. Full control over settings, roles, and room management.<br><strong>Co-owner</strong> — Promoted by the owner. Can share the room link and manage guests.<br><strong>Guest</strong> — Default role for joiners. Can participate in chat, voice, and apps.</p></div>
+                    </div>
+                </div>
+
+                <!-- RULES -->
+                <div class="rules-card" id="rules">
+                    <h3>📋 Community Rules</h3>
+                    <ol>
+                        <li><strong>Be respectful.</strong> Treat everyone with kindness regardless of language level.</li>
+                        <li><strong>No hate speech.</strong> Discrimination, harassment, or offensive content is not tolerated.</li>
+                        <li><strong>Stay on topic.</strong> Keep conversations relevant to the room's language and purpose.</li>
+                        <li><strong>No spam.</strong> Avoid flooding rooms with repetitive messages or promotions.</li>
+                        <li><strong>Help others learn.</strong> Gently correct mistakes and encourage progress.</li>
+                        <li><strong>Report issues.</strong> Flag inappropriate behavior to room owners or co-owners.</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+            <div class="container">
+                <div class="footer-bottom">
+                    <p>&copy; 2026 LetsTalk. All rights reserved.</p>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- ========== ROOM VIEW ========== -->
+    <div id="room-view" class="room-view hidden">
+        <div class="rv-header">
+            <div class="rv-info">
+                <h2 id="rv-title">Room Name</h2>
+                <span class="rv-lang" id="rv-lang">English</span>
+                <span class="rv-level" id="rv-level">Any Level</span>
+            </div>
+            <div class="rv-header-actions">
+                <button class="rv-action-btn" id="rv-share-btn" title="Share Room">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    Share
+                </button>
+                <button class="rv-action-btn rv-close-btn" id="rv-close-btn">
+                    Close
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="rv-body">
+            <!-- Left: Participants Grid -->
+            <div class="rv-participants-area">
+                <!-- MAIN STAGE APP Container -->
+                <div id="ms-app-container" class="hidden" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-primary);">
+                    <div class="ms-header" style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--bg-card);">
+                        <div style="display:flex; align-items:center; gap:1.25rem;">
+                            <button id="ms-app-close" style="background:transparent; border:none; display:flex; align-items:center; gap:0.5rem; color:var(--text-primary); font-weight:600; font-size:0.9rem; cursor:pointer;"><span style="font-size:1.2em;">←</span> Hide game</button>
+                            <h3 id="ms-app-title" style="margin:0; font-size:1.1rem; color: var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">CHESS</h3>
+                            <div id="ms-app-subtitle" style="padding: 0.25rem 0.75rem; border: 1px solid var(--emerald); color: var(--emerald); border-radius: 4px; font-size: 0.75rem; text-transform:uppercase; font-weight:700; letter-spacing:1px; background: rgba(34,197,94,0.05);">CHESS LOBBY</div>
+                        </div>
+                        <button id="ms-app-focus" class="btn btn-secondary" style="background:var(--bg-elevated); border:1px solid var(--border); display:flex; align-items:center; gap:0.5rem; padding: 0.4rem 0.8rem; border-radius:var(--radius-sm);"><span style="font-size:1.2em;">⤢</span> Focus</button>
+                    </div>
+
+                    <!-- CHESS APP CONTENT -->
+                    <div id="ms-app-chess" class="hidden" style="flex: 1; background: var(--bg-primary); display: flex; flex-direction: column; overflow-y: auto;">
+                        <div id="chess-lobby-ui" style="display:flex; flex-direction:column; justify-content:center; padding: 3rem 4rem; gap: 2.5rem; max-width: 1200px; margin: 0 auto; min-height: 100%; width: 100%;">
+                            <div style="color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                                <div style="font-size:0.75rem; font-weight:700; letter-spacing:1.5px; margin-bottom:0.75rem; text-transform:uppercase;">TURN</div>
+                                <div style="font-size:1.4rem; color: var(--text-primary); font-weight:600;">Pick a live table or start a new game</div>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; box-shadow: var(--shadow-sm);">
+                                    <div>
+                                        <h4 style="margin:0 0 0.5rem 0; font-size:1.1rem;">Play vs Computer</h4>
+                                        <p style="margin:0; color:var(--text-muted); font-size:0.9rem; line-height:1.4;">Start a private computer game while staying in the room voice.</p>
+                                    </div>
+                                    <button class="btn" id="chess-btn-computer" style="background: var(--emerald); color: #fff; font-weight: 700; width: fit-content; border:none; padding: 0.6rem 1.25rem; border-radius: var(--radius-sm);">Play Computer</button>
+                                </div>
+                                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; box-shadow: var(--shadow-sm);">
+                                    <div>
+                                        <h4 style="margin:0 0 0.5rem 0; font-size:1.1rem;">Challenge a player</h4>
+                                        <p style="margin:0; color:var(--text-muted); font-size:0.9rem; line-height:1.4;">Open a live table that everyone in the room can spectate.</p>
+                                    </div>
+                                    <button class="btn" id="chess-btn-challenge" style="background: var(--emerald); color: #fff; font-weight: 700; width: fit-content; border:none; padding: 0.6rem 1.25rem; border-radius: var(--radius-sm);">Challenge</button>
+                                </div>
+                                
+                                <div style="display:flex; flex-direction:column;">
+                                    <h4 style="color:var(--text-muted); font-size:0.8rem; letter-spacing:1px; margin-bottom: 0.75rem; font-weight:700;">AVAILABLE PLAYERS</h4>
+                                    <div id="chess-available-players" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); overflow:hidden; min-height: 50px;">
+                                        <!-- populated dynamically -->
+                                    </div>
+                                </div>
+                                
+                                <div style="display:flex; flex-direction:column;">
+                                    <h4 style="color:var(--text-muted); font-size:0.8rem; letter-spacing:1px; margin-bottom: 0.75rem; font-weight:700;">OCCUPIED PLAYERS</h4>
+                                    <div id="chess-occupied-players" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); overflow:hidden; min-height: 50px;">
+                                        <div style="padding: 1rem 1.5rem; color: var(--text-muted); font-size:0.9rem;">Nobody is occupied.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="chess-game-ui" class="hidden" style="width: 100%; height: 100%; display: flex; align-items:center; justify-content:center; background:#161512;">
+                            <iframe id="chess-iframe" src="" style="width:100%; height:100%; border:none;"></iframe>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rv-participants-grid" id="rv-participants-grid"></div>
+                <!-- Bottom Toolbar -->
+                <div class="rv-toolbar" id="rv-toolbar">
+                    <button class="rv-tool-btn" id="rv-hand-btn" title="Raise Hand">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8V6a2 2 0 0 0-4 0v2M14 8V4a2 2 0 0 0-4 0v4m0 0V3a2 2 0 0 0-4 0v7m0 0l-1.76-1.76a2 2 0 0 0-2.83 2.83L8 17.59a6 6 0 0 0 8.49 0L18 16V8a2 2 0 0 0-4 0"/></svg>
+                    </button>
+                    <button class="rv-tool-btn rv-tool-cam" id="rv-cam-btn" title="Toggle Camera">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    </button>
+                    <button class="rv-tool-btn" id="rv-screen-btn" title="Screen Share">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </button>
+                    <button class="rv-tool-btn rv-tool-mic" id="rv-mic-btn" title="Toggle Microphone">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                    </button>
+                    <button class="rv-tool-btn rv-tool-leave" id="rv-leave-btn" title="Leave Room">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Right: Chat Sidebar -->
+            <div class="rv-chat-panel" id="rv-chat-panel">
+                <div class="rv-chat-header">
+                    <span>Room Chat</span>
+                </div>
+                <div class="rv-chat-tabs">
+                    <button class="rv-tab active" data-tab="chat" id="rv-tab-chat">💬</button>
+                    <button class="rv-tab" data-tab="members" id="rv-tab-members">👥</button>
+                    <button class="rv-tab" data-tab="apps" id="rv-tab-apps">🧩</button>
+                    <button class="rv-tab" data-tab="settings" id="rv-tab-settings">⚙️</button>
+                </div>
+                <!-- Tab: Chat -->
+                <div class="rv-tab-content active" id="rv-content-chat">
+                    <div class="rv-chat-messages" id="rv-chat-messages">
+                        <div class="rv-chat-empty">
+                            <span>💬</span>
+                            <p>No messages yet</p>
+                            <p class="muted">Be the first to say something</p>
+                        </div>
+                    </div>
+                    <!-- Rich Chat Input -->
+                    <div class="rv-chat-input-area">
+                        <!-- Chat Pickers -->
+                        <div class="picker-popup chat-popup hidden" id="emoji-picker-popup" style="padding: 0; border: none; overflow: hidden; background: transparent;">
+                            <emoji-picker id="emoji-picker-element" class="dark" style="width: 100%; height: 350px; --background: var(--bg-card); --border-color: var(--border); --input-border-color: var(--border-light); --input-font-color: var(--text-primary); --category-font-color: var(--text-secondary); --indicator-color: var(--accent);"></emoji-picker>
+                        </div>
+                        <div class="picker-popup chat-popup hidden" id="gif-picker-popup" style="display: flex; flex-direction: column;">
+                            <div class="picker-header" style="padding: 0.5rem; background: var(--surface);">
+                                <input type="text" id="gif-search" placeholder="Search GIFs..." autocomplete="off" style="width: 100%; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); outline: none;">
+                            </div>
+                            <div class="gif-grid" id="gif-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.25rem; padding: 0.5rem; overflow-y: auto; flex: 1;"></div>
+                        </div>
+                        <div class="picker-popup chat-popup hidden" id="sticker-picker-popup" style="display: flex; flex-direction: column;">
+                            <div class="picker-header" style="padding: 0.5rem; background: var(--surface);">
+                                <input type="text" id="sticker-search" placeholder="Search Stickers..." autocomplete="off" style="width: 100%; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); outline: none;">
+                            </div>
+                            <div class="gif-grid" id="sticker-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; padding: 0.5rem; overflow-y: auto; flex: 1; align-items: center;"></div>
+                        </div>
+
+                        <div class="rv-chat-tools">
+                            <button class="rv-chat-tool-btn" id="rv-btn-emoji" title="Emoji">😀</button>
+                            <button class="rv-chat-tool-btn" id="rv-btn-gif" title="GIF">GIF</button>
+                            <button class="rv-chat-tool-btn" id="rv-btn-sticker" title="Stickers">🎨</button>
+                            <button class="rv-chat-tool-btn" id="rv-btn-translate" title="Translate">🌐</button>
+                            <button class="rv-chat-tool-btn" id="rv-btn-upload" title="Upload Image">📷</button>
+                            <input type="file" id="rv-file-input" accept="image/*,video/*" class="hidden">
+                        </div>
+                        <div class="rv-chat-input-wrap">
+                            <input type="text" id="rv-chat-input" placeholder="Message this room..." autocomplete="off">
+                            <button class="rv-chat-send" id="rv-chat-send">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Tab: Members -->
+                <div class="rv-tab-content" id="rv-content-members">
+                    <div class="rv-members-list" id="rv-members-list"></div>
+                </div>
+                <!-- Tab: Apps -->
+                <div class="rv-tab-content" id="rv-content-apps">
+                    <div class="rv-apps-header">
+                        <p class="muted">Click on any app to get started!</p>
+                    </div>
+                    <div class="rv-apps-grid" id="rv-apps-grid">
+                        <button class="rv-app-card" data-app="youtube"><span class="rv-app-icon" style="color:#f43f5e">▶️</span><span>YouTube</span></button>
+                        <button class="rv-app-card" data-app="pomodoro"><span class="rv-app-icon" style="color:#f59e0b">⏱️</span><span>Pomodoro</span></button>
+                        <button class="rv-app-card" data-app="todo"><span class="rv-app-icon" style="color:#22c55e">✅</span><span>Todo</span></button>
+                        <button class="rv-app-card" data-app="chess"><span class="rv-app-icon" style="color:#a855f7">♟️</span><span>Chess</span></button>
+                        <button class="rv-app-card" data-app="document"><span class="rv-app-icon" style="color:#f59e0b">📄</span><span>Document</span></button>
+                        <button class="rv-app-card" data-app="whiteboard"><span class="rv-app-icon" style="color:#06b6d4">🎨</span><span>Whiteboard</span></button>
+                    </div>
+                    <!-- App views (hidden by default) -->
+                    <div class="rv-app-view hidden" id="rv-app-view">
+                        <div class="rv-app-view-header">
+                            <button class="rv-app-back" id="rv-app-back">← Back</button>
+                            <span class="rv-app-view-title" id="rv-app-view-title">App</span>
+                        </div>
+                        <div class="rv-app-view-content" id="rv-app-view-content" style="display: flex; flex-direction: column;">
+                            <!-- YOUTUBE APP UI -->
+                            <div id="yt-app-container" class="hidden" style="display: flex; flex-direction: column; flex: 1;">
+                                <div id="yt-search-area" style="padding: 1rem; border-bottom: 1px solid var(--border);">
+                                    <div style="display:flex; gap:0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.5rem; align-items:center;">
+                                        <span style="color:var(--text-muted); padding-left:0.5rem;">🔍</span>
+                                        <input type="text" id="yt-search-input" placeholder="Search YouTube or paste a video link..." style="background:transparent; border:none; outline:none; color:var(--text-primary); flex:1; font-family:var(--font);">
+                                        <button id="yt-search-btn" class="btn btn-primary" style="padding: 0.25rem 0.75rem; border-radius: var(--radius-sm);">Load</button>
+                                    </div>
+                                </div>
+                                
+                                <div id="yt-results-area" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                    <div class="yt-mix-card" data-video="jfKfPfyJRdk">
+                                        <div class="yt-mix-thumb">
+                                            <img src="https://img.youtube.com/vi/jfKfPfyJRdk/hqdefault.jpg" alt="Lofi">
+                                            <div class="yt-mix-badge">Mix</div>
+                                        </div>
+                                        <div class="yt-mix-info">
+                                            <div class="yt-mix-tag">LOFI CURATED</div>
+                                            <strong>Lofi Hip Hop Radio - Beats to Relax/Study to</strong>
+                                            <span>Lofi Girl • Mix</span>
+                                        </div>
+                                    </div>
+                                    <div class="yt-mix-card" data-video="dQw4w9WgXcQ">
+                                        <div class="yt-mix-thumb">
+                                            <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg" alt="Rick Astley">
+                                            <div class="yt-mix-badge">Mix</div>
+                                        </div>
+                                        <div class="yt-mix-info">
+                                            <div class="yt-mix-tag">CLASSIC CURATED</div>
+                                            <strong>Never Gonna Give You Up</strong>
+                                            <span>Rick Astley • Mix</span>
+                                        </div>
+                                    </div>
+                                    <div class="yt-mix-card" data-video="5qap5aO4i9A">
+                                        <div class="yt-mix-thumb">
+                                            <img src="https://img.youtube.com/vi/5qap5aO4i9A/hqdefault.jpg" alt="Lofi City">
+                                            <div class="yt-mix-badge">Mix</div>
+                                        </div>
+                                        <div class="yt-mix-info">
+                                            <div class="yt-mix-tag">LOFI CURATED</div>
+                                            <strong>lofi city drive</strong>
+                                            <span>Focus Harbor • Mix</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="yt-player-wrapper" class="hidden" style="display:flex; flex-direction:column; gap: 1rem; padding: 1rem;">
+                                    <div style="width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--radius-lg); overflow: hidden; position: relative; box-shadow: var(--shadow-lg);">
+                                        <div id="yt-player" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
+                                        <div id="yt-player-blocker" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:10; display:none; background:transparent;" title="Controls locked to room owner"></div>
+                                    </div>
+                                    
+                                    <div style="display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                                <button id="yt-control-play" class="btn btn-primary" style="padding: 0.6rem 1.5rem; border-radius: 50px; font-weight: 600; display: flex; gap: 0.5rem; align-items: center; white-space: nowrap;">
+                                                    <span style="font-size:1.1em;">⏯️</span> Play / Pause
+                                                </button>
+                                                <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; background: rgba(34, 197, 94, 0.1); color: var(--emerald); border-radius: 50px; font-size: 0.8rem; font-weight: 700; white-space: nowrap;">
+                                                    <span style="width:8px; height:8px; border-radius:50%; background:var(--emerald); box-shadow: 0 0 8px var(--emerald);"></span>
+                                                    Live Sync
+                                                </div>
+                                            </div>
+                                            <button id="yt-close-player" class="btn btn-secondary" style="background: rgba(244, 63, 94, 0.1); color: var(--rose); border: 1px solid rgba(244, 63, 94, 0.2); padding: 0.5rem 1.25rem; border-radius: 50px; font-weight:600;">
+                                                Stop Video
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- POMODORO APP UI -->
+                            <div id="pomo-app-container" class="hidden" style="display: flex; flex-direction: column; flex: 1; padding: 1.5rem; overflow-y: auto;">
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 1.5rem;">
+                                    
+                                    <!-- Mode selector -->
+                                    <div class="pomo-modes" style="display: flex; width: 100%; gap: 0.25rem; background: rgba(255,255,255,0.03); padding: 0.25rem; border-radius: 50px; margin-bottom: 0;">
+                                        <button class="pomo-mode-btn active" data-mode="pomodoro" data-min="25" style="flex: 1; text-align: center; font-size: 0.75rem; padding: 0.5rem 0;">Focus</button>
+                                        <button class="pomo-mode-btn" data-mode="short" data-min="5" style="flex: 1; text-align: center; font-size: 0.75rem; padding: 0.5rem 0;">Short Break</button>
+                                        <button class="pomo-mode-btn" data-mode="long" data-min="15" style="flex: 1; text-align: center; font-size: 0.75rem; padding: 0.5rem 0;">Long Break</button>
+                                    </div>
+
+                                    <!-- Timer Display -->
+                                    <div style="text-align: center; margin: 0.5rem 0;">
+                                        <div id="pomo-display" style="font-size: 5rem; font-weight: 700; color: var(--text-primary); line-height: 1; font-family: var(--font); letter-spacing: -2px;">25:00</div>
+                                        <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Time to focus</div>
+                                    </div>
+
+                                    <!-- Controls -->
+                                    <div style="display: flex; width: 100%; gap: 0.75rem;">
+                                        <button id="pomo-btn-start" class="btn pomo-btn-start" style="flex: 2; padding: 0.8rem; font-size: 1rem; border-radius: 50px; font-weight: 700;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display: inline-block; vertical-align: text-bottom; margin-right: 5px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                            <span style="vertical-align: middle;">Start</span>
+                                        </button>
+                                        <button id="pomo-btn-reset" class="btn pomo-btn-reset" style="flex: 1; padding: 0.8rem; border-radius: 50px;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display: inline-block; vertical-align: middle;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                        </button>
+                                    </div>
+
+                                    <!-- Goal -->
+                                    <div style="width: 100%; margin-top: 0.5rem;">
+                                        <input type="text" id="pomo-task" placeholder="What are we focusing on?" style="width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 50px; padding: 0.8rem 1.25rem; color: var(--text-primary); font-family: var(--font); outline: none; text-align: center; transition: all 0.2s;">
+                                    </div>
+                                    
+                                    <span id="pomo-minutes-display" style="display: none;"></span> 
+                                    
+                                    <!-- Sync badge -->
+                                    <div id="pomo-sync-badge" style="text-align:center; color:var(--emerald); font-size:0.75rem; font-weight:600; display:none; background: rgba(34,197,94,0.1); padding: 0.4rem 1rem; border-radius: 50px;">
+                                        <span style="display:inline-block; width:6px; height:6px; background:var(--emerald); border-radius:50%; margin-right:4px; box-shadow:0 0 5px var(--emerald);"></span>
+                                        Synced by <span id="pomo-sync-user">Host</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TODO APP UI -->
+                            <div id="todo-app-container" class="hidden" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 1.5rem 0;">
+                                <!-- Input Area -->
+                                <div style="display: flex; gap: 0.5rem; padding: 0 1.5rem; margin-bottom: 1rem;">
+                                    <input type="text" id="todo-input" placeholder="Add a shared task..." style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 0.75rem 1rem; color: var(--text-primary); outline: none; font-family: var(--font); transition: all 0.2s;">
+                                    <button class="btn btn-primary" id="todo-btn-add" style="border-radius: var(--radius-sm); padding: 0 1.25rem; font-weight: 600; background: var(--emerald); border-color: var(--emerald);">Add</button>
+                                </div>
+                                <!-- List Area -->
+                                <div id="todo-list-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding: 0 1.5rem; gap: 0.5rem;">
+                                    <!-- Dynamic items -->
+                                    <div id="todo-empty-state" style="text-align: center; color: var(--text-muted); padding: 3rem 0; font-size: 0.9rem;">
+                                        List is empty. Create a task!
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Tab: Settings -->
+                <div class="rv-tab-content" id="rv-content-settings">
+                    <div class="rv-settings-list" id="rv-settings-list">
+                        <div class="rv-setting-item">
+                            <span>Room Info</span>
+                            <p id="rv-setting-desc" class="muted">—</p>
+                        </div>
+                        <div class="rv-setting-item">
+                            <span>Room Type</span>
+                            <select id="rv-setting-type" class="rv-setting-select">
+                                <option value="text">💬 Text Only</option>
+                                <option value="voice">🎙️ Voice Only</option>
+                                <option value="both">🎙️💬 Both</option>
+                            </select>
+                        </div>
+                        <div class="rv-setting-item">
+                            <span>Access</span>
+                            <p id="rv-setting-access" class="muted">Open</p>
+                        </div>
+                        <div class="rv-setting-item">
+                            <span>Max Participants</span>
+                            <select id="rv-setting-max" class="rv-setting-select">
+                                <option value="1">1 person</option>
+                                <option value="2">2 people</option>
+                                <option value="3">3 people</option>
+                                <option value="4">4 people</option>
+                                <option value="5">5 people</option>
+                                <option value="6">6 people</option>
+                                <option value="7">7 people</option>
+                                <option value="8">8 people</option>
+                                <option value="9">9 people</option>
+                                <option value="10">10 people</option>
+                                <option value="999">Unlimited</option>
+                            </select>
+                        </div>
+                        <div class="rv-setting-item">
+                            <span>Created By</span>
+                            <p id="rv-setting-creator" class="muted">—</p>
+                        </div>
+                        <button class="btn btn-green btn-full rv-save-settings hidden" id="rv-save-settings">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Picker popups have been moved inside the chat panel -->
+        <div class="picker-popup hidden" id="translate-popup"></div>
+        <!-- Floating Reactions -->
+        <div class="rv-reactions" id="rv-reactions"></div>
+    </div>
+
+    <!-- ========== SHARE ROOM MODAL ========== -->
+    <div class="modal-overlay" id="share-modal">
+        <div class="modal">
+            <button class="modal-close" id="share-modal-close">&times;</button>
+            <h2>Share This Room</h2>
+            <p>Send the room link to friends or copy/share it directly.</p>
+            <div class="share-link-box">
+                <label class="share-link-label">Room link</label>
+                <div class="share-link-row">
+                    <input type="text" id="share-link-input" readonly>
+                    <button class="btn btn-outline" id="share-copy-btn">📋 Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== LOGIN MODAL ========== -->
+    <div class="modal-overlay" id="login-modal">
+        <div class="modal">
+            <button class="modal-close" id="login-modal-close">&times;</button>
+            <h2>Welcome back</h2>
+            <p>Log in to continue your language journey.</p>
+            <form class="modal-form" id="login-form">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" placeholder="you@example.com" required>
+                    <span class="form-error" id="login-email-error"></span>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                    <span class="form-error" id="login-password-error"></span>
+                </div>
+                <span class="form-error form-error-general" id="login-error"></span>
+                <button type="submit" class="btn btn-primary btn-full" id="login-submit-btn">Log In</button>
+            </form>
+            <div class="modal-divider"><span>or</span></div>
+            <button class="btn btn-social" id="btn-google-login" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                Continue with Google
+            </button>
+            <p class="modal-footer-text">Don't have an account? <a href="#" id="switch-to-signup">Sign up free</a></p>
+        </div>
+    </div>
+
+    <!-- ========== SIGNUP MODAL ========== -->
+    <div class="modal-overlay" id="signup-modal">
+        <div class="modal">
+            <button class="modal-close" id="signup-modal-close">&times;</button>
+            <h2>Create your account</h2>
+            <p>Start practicing languages with real people today.</p>
+            <form class="modal-form" id="signup-form">
+                <div class="form-group">
+                    <label for="signup-username">Username</label>
+                    <input type="text" id="signup-username" placeholder="coolpolyglot42" required minlength="2" maxlength="30">
+                </div>
+                <div class="form-group">
+                    <label for="signup-email">Email</label>
+                    <input type="email" id="signup-email" placeholder="you@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="signup-password">Password</label>
+                    <input type="password" id="signup-password" placeholder="Min 6 characters" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="signup-confirm">Confirm Password</label>
+                    <input type="password" id="signup-confirm" placeholder="Re-enter password" required>
+                </div>
+                <span class="form-error form-error-general" id="signup-error"></span>
+                <button type="submit" class="btn btn-primary btn-full" id="signup-submit-btn">Create Account</button>
+            </form>
+            <div class="modal-divider"><span>or</span></div>
+            <button class="btn btn-social" id="btn-google-signup" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                Sign up with Google
+            </button>
+            <p class="modal-footer-text">Already have an account? <a href="#" id="switch-to-login">Log in</a></p>
+        </div>
+    </div>
+
+    <!-- ========== CREATE ROOM MODAL ========== -->
+    <div class="modal-overlay" id="create-room-modal">
+        <div class="modal modal-create">
+            <button class="modal-close" id="create-room-close">&times;</button>
+            <h2>Create a Room</h2>
+            <form class="modal-form" id="create-room-form">
+                <div class="form-group">
+                    <label>Room Name</label>
+                    <input type="text" id="room-name-input" placeholder="English Practice" required maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label>Room Type</label>
+                    <div class="access-picker">
+                        <label class="access-option"><input type="radio" name="room-type" value="both" checked><span class="access-label">🎙️💬 Both</span></label>
+                        <label class="access-option"><input type="radio" name="room-type" value="voice"><span class="access-label">🎙️ Voice</span></label>
+                        <label class="access-option"><input type="radio" name="room-type" value="text"><span class="access-label">💬 Text</span></label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Access</label>
+                    <div class="access-picker">
+                        <label class="access-option"><input type="radio" name="room-access" value="open" checked><span class="access-label">Open</span></label>
+                        <label class="access-option"><input type="radio" name="room-access" value="friends"><span class="access-label">Friends</span></label>
+                        <label class="access-option"><input type="radio" name="room-access" value="invite"><span class="access-label">Invite Only</span></label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Languages (max 2)</label>
+                    <div class="lang-tag-input" id="lang-tag-input">
+                        <div class="lang-tags" id="lang-tags"></div>
+                        <select id="room-lang-select">
+                            <option value="">Select language...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Language Level</label>
+                    <select id="room-level-input">
+                        <option value="any">Any Level</option>
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Max Participants</label>
+                    <select id="room-max-input">
+                        <option value="1">1 person</option>
+                        <option value="2">2 people</option>
+                        <option value="3">3 people</option>
+                        <option value="4">4 people</option>
+                        <option value="5">5 people</option>
+                        <option value="6">6 people</option>
+                        <option value="7">7 people</option>
+                        <option value="8">8 people</option>
+                        <option value="9">9 people</option>
+                        <option value="10" selected>10 people</option>
+                        <option value="999">Unlimited</option>
+                    </select>
+                </div>
+                <span class="form-error form-error-general" id="create-room-error"></span>
+                <div class="create-room-actions">
+                    <button type="button" class="btn btn-ghost" id="create-room-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-green">Create Room</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== PROFILE SETTINGS MODAL ========== -->
+    <div class="modal-overlay" id="profile-modal">
+        <div class="modal">
+            <button class="modal-close" id="profile-modal-close">&times;</button>
+            <h2>Profile Settings</h2>
+            <form class="modal-form" id="profile-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="profile-username" minlength="2" maxlength="30">
+                </div>
+                <div class="form-group">
+                    <label>Bio</label>
+                    <input type="text" id="profile-bio" placeholder="Tell us about yourself..." maxlength="200">
+                </div>
+                <div class="form-group">
+                    <label>Native Language</label>
+                    <select id="profile-native-lang"></select>
+                </div>
+                <div class="form-group">
+                    <label>Learning Language</label>
+                    <select id="profile-learning-lang">
+                        <option value="">Not set</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Avatar Color</label>
+                    <div class="color-picker" id="color-picker">
+                        <button type="button" class="color-swatch" data-color="#6366f1" style="background:#6366f1"></button>
+                        <button type="button" class="color-swatch" data-color="#22c55e" style="background:#22c55e"></button>
+                        <button type="button" class="color-swatch" data-color="#f43f5e" style="background:#f43f5e"></button>
+                        <button type="button" class="color-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
+                        <button type="button" class="color-swatch" data-color="#06b6d4" style="background:#06b6d4"></button>
+                        <button type="button" class="color-swatch" data-color="#a855f7" style="background:#a855f7"></button>
+                        <button type="button" class="color-swatch" data-color="#ec4899" style="background:#ec4899"></button>
+                        <button type="button" class="color-swatch" data-color="#14b8a6" style="background:#14b8a6"></button>
+                    </div>
+                </div>
+                <span class="form-error form-error-general" id="profile-error"></span>
+                <button type="submit" class="btn btn-primary btn-full">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
