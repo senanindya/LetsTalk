@@ -174,19 +174,23 @@ const SocketClient = {
             const peer = Voice.peers.get(socketId);
             if (peer) {
                 peer.isScreenSharing = true;
-                // If peer already has a video stream, show it now
-                if (peer.stream && peer.stream.getVideoTracks().length > 0) {
-                    RoomView.showScreenShare(peer.stream, username);
+                // If video track already arrived (ontrack fired before this event), show it now
+                const videoStream = peer.videoStream || (peer.stream && peer.stream.getVideoTracks().length > 0 ? peer.stream : null);
+                if (videoStream) {
+                    RoomView.showScreenShare(videoStream, username);
                 }
+                // Otherwise ontrack will fire later and route it via peer.isScreenSharing flag
             }
         });
         this.socket.on('screen-share-stopped', ({ socketId }) => {
             const peer = Voice.peers.get(socketId);
             if (peer) {
                 peer.isScreenSharing = false;
+                peer.videoStream = null;
             }
             RoomView.hideScreenShare();
         });
+
 
         // Room moderation events
         this.socket.on('room-role-update', ({ userId, role }) => {
@@ -536,31 +540,35 @@ const Voice = {
         if (this.screenStream) this.screenStream.getTracks().forEach(track => pc.addTrack(track, this.screenStream));
         pc.ontrack = (event) => {
             const peer = this.peers.get(socketId);
-            if (peer) {
-                const stream = event.streams[0];
-                peer.stream = stream;
-                const track = event.track;
-                if (track.kind === 'video') {
-                    // If this peer is screen sharing, show in the big screen share view
-                    if (peer.isScreenSharing) {
-                        RoomView.showScreenShare(stream, peer.username);
-                    } else {
-                        RoomView.updatePeerVideo(socketId, stream);
-                    }
-                }
-                if (track.kind === 'audio') {
-                    const participant = RoomView.participants.find(pt => pt.username === peer.username);
-                    if (participant) {
-                        AudioVisualizer.attach(participant.id, stream);
-                    }
-                    // Audio element for playback
-                    let audio = document.getElementById(`audio-${socketId}`);
-                    if (!audio) { audio = document.createElement('audio'); audio.id = `audio-${socketId}`; audio.autoplay = true; document.body.appendChild(audio); }
-                    audio.srcObject = stream;
+            if (!peer) return;
+            const stream = event.streams[0];
+            const track = event.track;
+
+            if (track.kind === 'audio') {
+                peer.stream = peer.stream || stream;
+                const participant = RoomView.participants.find(pt => pt.username === peer.username);
+                if (participant) AudioVisualizer.attach(participant.id, stream);
+                let audio = document.getElementById(`audio-${socketId}`);
+                if (!audio) { audio = document.createElement('audio'); audio.id = `audio-${socketId}`; audio.autoplay = true; document.body.appendChild(audio); }
+                audio.srcObject = stream;
+            }
+
+            if (track.kind === 'video') {
+                // Always store the latest video stream on the peer
+                peer.videoStream = stream;
+
+                if (peer.isScreenSharing) {
+                    // screen-share-started already arrived, show it now
+                    RoomView.showScreenShare(stream, peer.username);
+                } else {
+                    // Either a camera stream OR screen-share-started hasn't arrived yet.
+                    // Store and let screen-share-started handler route it.
+                    RoomView.updatePeerVideo(socketId, stream);
                 }
             }
             RoomView.updateParticipantVoice();
         };
+
         pc.onicecandidate = (e) => { if (e.candidate) SocketClient.socket.emit('webrtc-ice-candidate', { to: socketId, candidate: e.candidate }); };
         this.peers.set(socketId, { pc, stream: null, username });
         return pc;
@@ -806,7 +814,7 @@ const RoomView = {
             grid.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">No one is here yet. You\'re the first!</p>';
         } else {
             grid.innerHTML = participants.map(p => {
-                const role = p.room_role || (this.room && p.id === this.room.creator_id ? 'owner' : 'guest');
+                const role = p.room_role || (this.room && String(p.id) === String(this.room.creator_id) ? 'owner' : 'guest');
                 const isYou = p.id === Auth.user?.id;
                 const isMuted = isYou && Voice.isMuted;
                 const avatarContent = p.avatar_url
@@ -852,7 +860,7 @@ const RoomView = {
         // Update members list tab
         if (membersList) {
             membersList.innerHTML = participants.map(p => {
-                const role = p.room_role || (this.room && p.id === this.room.creator_id ? 'owner' : 'guest');
+                const role = p.room_role || (this.room && String(p.id) === String(this.room.creator_id) ? 'owner' : 'guest');
                 const memberAvatarContent = p.avatar_url
                     ? `<img src="${escapeHtml(p.avatar_url)}" alt="${escapeHtml(p.username)}" class="rv-member-avatar-img" referrerpolicy="no-referrer">`
                     : (p.username||'U')[0].toUpperCase();
@@ -2804,8 +2812,9 @@ const Moderation = {
 
     getMyRole() {
         if (!Auth.user || !RoomView.room) return 'guest';
-        if (RoomView.room.creator_id === Auth.user.id) return 'owner';
-        const me = RoomView.participants.find(p => p.id === Auth.user.id);
+        // Use == to handle potential string/int type differences between JWT and DB
+        if (String(RoomView.room.creator_id) === String(Auth.user.id)) return 'owner';
+        const me = RoomView.participants.find(p => String(p.id) === String(Auth.user.id));
         return me?.room_role || 'guest';
     },
 

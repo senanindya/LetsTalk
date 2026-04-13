@@ -298,9 +298,16 @@ io.on('connection', (socket) => {
 
         // Get current participants
         const participants = await queryAll(`
-            SELECT u.id, u.username, u.avatar_color, u.avatar_url
+            SELECT u.id, u.username, u.avatar_color, u.avatar_url,
+                CASE
+                    WHEN r.creator_id = u.id THEN 'owner'
+                    WHEN rr.role IS NOT NULL THEN rr.role
+                    ELSE 'guest'
+                END as room_role
             FROM room_participants rp
             JOIN users u ON rp.user_id = u.id
+            JOIN rooms r ON r.id = rp.room_id
+            LEFT JOIN room_roles rr ON rr.room_id = rp.room_id AND rr.user_id = u.id
             WHERE rp.room_id = ?
         `, [roomId]);
 
@@ -338,9 +345,16 @@ io.on('connection', (socket) => {
         await runSql('DELETE FROM room_participants WHERE room_id = ? AND user_id = ?', [roomId, sock.user.id]);
 
         const participants = await queryAll(`
-            SELECT u.id, u.username, u.avatar_color, u.avatar_url
+            SELECT u.id, u.username, u.avatar_color, u.avatar_url,
+                CASE
+                    WHEN r.creator_id = u.id THEN 'owner'
+                    WHEN rr.role IS NOT NULL THEN rr.role
+                    ELSE 'guest'
+                END as room_role
             FROM room_participants rp
             JOIN users u ON rp.user_id = u.id
+            JOIN rooms r ON r.id = rp.room_id
+            LEFT JOIN room_roles rr ON rr.room_id = rp.room_id AND rr.user_id = u.id
             WHERE rp.room_id = ?
         `, [roomId]);
 
@@ -586,9 +600,16 @@ io.on('connection', (socket) => {
         // Notify current room
         if (socket.currentRoom) {
             const participants = await queryAll(`
-                SELECT u.id, u.username, u.avatar_color, u.avatar_url
+                SELECT u.id, u.username, u.avatar_color, u.avatar_url,
+                    CASE
+                        WHEN r.creator_id = u.id THEN 'owner'
+                        WHEN rr.role IS NOT NULL THEN rr.role
+                        ELSE 'guest'
+                    END as room_role
                 FROM room_participants rp
                 JOIN users u ON rp.user_id = u.id
+                JOIN rooms r ON r.id = rp.room_id
+                LEFT JOIN room_roles rr ON rr.room_id = rp.room_id AND rr.user_id = u.id
                 WHERE rp.room_id = ?
             `, [socket.currentRoom]);
 
@@ -598,6 +619,7 @@ io.on('connection', (socket) => {
                 participantCount: participants.length
             });
         }
+
     });
 });
 

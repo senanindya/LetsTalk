@@ -9,7 +9,7 @@ const router = express.Router({ mergeParams: true });
 async function getRole(roomId, userId) {
     const room = await queryOne('SELECT creator_id FROM rooms WHERE id = ?', [roomId]);
     if (!room) return null;
-    if (room.creator_id === userId) return 'owner';
+    if (String(room.creator_id) === String(userId)) return 'owner';
     const row = await queryOne('SELECT role FROM room_roles WHERE room_id = ? AND user_id = ?', [roomId, userId]);
     return row ? row.role : 'guest';
 }
