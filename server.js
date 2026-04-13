@@ -446,6 +446,27 @@ io.on('connection', (socket) => {
     });
 
     // ------------------------------------------
+    // SCREEN SHARE SIGNALING
+    // ------------------------------------------
+    socket.on('screen-share-started', ({ roomId }) => {
+        if (!roomId) return;
+        socket.to(`room-${roomId}`).emit('screen-share-started', {
+            socketId: socket.id,
+            username: socket.user.username
+        });
+        console.log(`  📺 ${socket.user.username} started screen sharing in room ${roomId}`);
+    });
+
+    socket.on('screen-share-stopped', ({ roomId }) => {
+        if (!roomId) return;
+        socket.to(`room-${roomId}`).emit('screen-share-stopped', {
+            socketId: socket.id,
+            username: socket.user.username
+        });
+        console.log(`  ⏹️ ${socket.user.username} stopped screen sharing in room ${roomId}`);
+    });
+
+    // ------------------------------------------
     // YOUTUBE SYNC EVENT
     // ------------------------------------------
     socket.on('yt-sync', ({ roomId, action, payload }) => {

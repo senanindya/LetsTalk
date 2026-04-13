@@ -169,6 +169,24 @@ const SocketClient = {
         this.socket.on('webrtc-offer', data => Voice.onOffer(data));
         this.socket.on('webrtc-answer', data => Voice.onAnswer(data));
         this.socket.on('webrtc-ice-candidate', data => Voice.onIceCandidate(data));
+        // Screen share state signals
+        this.socket.on('screen-share-started', ({ socketId, username }) => {
+            const peer = Voice.peers.get(socketId);
+            if (peer) {
+                peer.isScreenSharing = true;
+                // If peer already has a video stream, show it now
+                if (peer.stream && peer.stream.getVideoTracks().length > 0) {
+                    RoomView.showScreenShare(peer.stream, username);
+                }
+            }
+        });
+        this.socket.on('screen-share-stopped', ({ socketId }) => {
+            const peer = Voice.peers.get(socketId);
+            if (peer) {
+                peer.isScreenSharing = false;
+            }
+            RoomView.hideScreenShare();
+        });
     },
 
     joinRoom(roomId) { if (!this.socket) return; this.currentRoomId = roomId; this.socket.emit('join-room', roomId); },
@@ -374,8 +392,8 @@ const Voice = {
                 const screenTrack = this.screenStream.getVideoTracks()[0];
                 // When user stops sharing via browser UI
                 screenTrack.onended = () => { this.stopScreenShare(); };
-                // Replace video track on all peers (or add if no video)
-                for (const [, peer] of this.peers) {
+                // Replace or add video track on all peers, then renegotiate
+                for (const [socketId, peer] of this.peers) {
                     const senders = peer.pc.getSenders();
                     const videoSender = senders.find(s => s.track && s.track.kind === 'video');
                     if (videoSender) {
@@ -383,9 +401,21 @@ const Voice = {
                     } else {
                         peer.pc.addTrack(screenTrack, this.screenStream);
                     }
+                    // Renegotiate: create a new offer so the remote peer gets the new video track
+                    try {
+                        const offer = await peer.pc.createOffer();
+                        await peer.pc.setLocalDescription(offer);
+                        SocketClient.socket.emit('webrtc-offer', { to: socketId, offer });
+                    } catch (e) {
+                        console.error('Renegotiation offer error:', e);
+                    }
                 }
                 this.isScreenSharing = true;
                 RoomView.showScreenShare(this.screenStream);
+                // Notify all peers in room that screen sharing started
+                if (SocketClient.currentRoomId) {
+                    SocketClient.socket.emit('screen-share-started', { roomId: SocketClient.currentRoomId });
+                }
                 showNotification('📺 Screen sharing started');
             } catch (err) {
                 if (err.name !== 'NotAllowedError') {
@@ -399,33 +429,51 @@ const Voice = {
         this.updateToolbarUI();
     },
 
-    stopScreenShare() {
+    async stopScreenShare() {
         if (this.screenStream) {
             this.screenStream.getTracks().forEach(t => t.stop());
             this.screenStream = null;
         }
-        // If camera was on, re-add camera track; otherwise remove video sender
+        // If camera was on, replace screen track with camera; otherwise remove video sender
         if (this.isCameraOn && this.localStream) {
             const camTrack = this.localStream.getVideoTracks()[0];
             if (camTrack) {
-                for (const [, peer] of this.peers) {
+                for (const [socketId, peer] of this.peers) {
                     const senders = peer.pc.getSenders();
                     const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-                    if (videoSender) videoSender.replaceTrack(camTrack);
+                    if (videoSender) {
+                        await videoSender.replaceTrack(camTrack);
+                        // Renegotiate
+                        try {
+                            const offer = await peer.pc.createOffer();
+                            await peer.pc.setLocalDescription(offer);
+                            SocketClient.socket.emit('webrtc-offer', { to: socketId, offer });
+                        } catch (e) { console.error('Renegotiation error:', e); }
+                    }
                 }
             }
         } else {
-            for (const [, peer] of this.peers) {
+            for (const [socketId, peer] of this.peers) {
                 const senders = peer.pc.getSenders();
                 const videoSender = senders.find(s => s.track && s.track.kind === 'video');
                 if (videoSender) {
                     try { peer.pc.removeTrack(videoSender); } catch(e) {}
+                    // Renegotiate after removing track
+                    try {
+                        const offer = await peer.pc.createOffer();
+                        await peer.pc.setLocalDescription(offer);
+                        SocketClient.socket.emit('webrtc-offer', { to: socketId, offer });
+                    } catch (e) { console.error('Renegotiation error:', e); }
                 }
             }
         }
         this.isScreenSharing = false;
         RoomView.hideScreenShare();
         this.updateToolbarUI();
+        // Notify peers that screen sharing stopped
+        if (SocketClient.currentRoomId) {
+            SocketClient.socket.emit('screen-share-stopped', { roomId: SocketClient.currentRoomId });
+        }
         showNotification('📺 Screen sharing stopped');
     },
 
@@ -459,18 +507,25 @@ const Voice = {
             if (peer) {
                 const stream = event.streams[0];
                 peer.stream = stream;
-                // Check if it has video
-                if (stream.getVideoTracks().length > 0) {
-                    RoomView.updatePeerVideo(socketId, stream);
+                const track = event.track;
+                if (track.kind === 'video') {
+                    // If this peer is screen sharing, show in the big screen share view
+                    if (peer.isScreenSharing) {
+                        RoomView.showScreenShare(stream, peer.username);
+                    } else {
+                        RoomView.updatePeerVideo(socketId, stream);
+                    }
                 }
-                const participant = RoomView.participants.find(pt => pt.username === peer.username);
-                if (participant && stream.getAudioTracks().length > 0) {
-                    AudioVisualizer.attach(participant.id, stream);
+                if (track.kind === 'audio') {
+                    const participant = RoomView.participants.find(pt => pt.username === peer.username);
+                    if (participant) {
+                        AudioVisualizer.attach(participant.id, stream);
+                    }
+                    // Audio element for playback
+                    let audio = document.getElementById(`audio-${socketId}`);
+                    if (!audio) { audio = document.createElement('audio'); audio.id = `audio-${socketId}`; audio.autoplay = true; document.body.appendChild(audio); }
+                    audio.srcObject = stream;
                 }
-                // Audio
-                let audio = document.getElementById(`audio-${socketId}`);
-                if (!audio) { audio = document.createElement('audio'); audio.id = `audio-${socketId}`; audio.autoplay = true; document.body.appendChild(audio); }
-                audio.srcObject = stream;
             }
             RoomView.updateParticipantVoice();
         };
@@ -879,7 +934,7 @@ const RoomView = {
         }
     },
 
-    showScreenShare(stream) {
+    showScreenShare(stream, sharerName) {
         let container = document.getElementById('rv-screen-share-view');
         if (!container) {
             container = document.createElement('div');
@@ -888,6 +943,12 @@ const RoomView = {
             document.querySelector('.rv-participants-area').prepend(container);
         }
         container.innerHTML = '';
+        if (sharerName) {
+            const label = document.createElement('div');
+            label.className = 'rv-screen-share-label';
+            label.textContent = `📺 ${sharerName}'s screen`;
+            container.appendChild(label);
+        }
         const video = document.createElement('video');
         video.srcObject = stream;
         video.autoplay = true;
