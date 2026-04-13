@@ -1,8 +1,12 @@
 const express = require('express');
 const { queryAll, queryOne, runSql } = require('../database/db');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
+const roomRolesRoutes = require('./room-roles');
 
 const router = express.Router();
+
+// Mount roles sub-router
+router.use('/:id/roles', roomRolesRoutes);
 
 // ==========================================
 // GET /api/rooms — List all rooms
@@ -96,9 +100,16 @@ router.get('/:id', async (req, res) => {
         `, [parseInt(req.params.id)]);
 
         const participants = await queryAll(`
-            SELECT u.id, u.username, u.avatar_color, u.avatar_url
+            SELECT u.id, u.username, u.avatar_color, u.avatar_url,
+                CASE
+                    WHEN r.creator_id = u.id THEN 'owner'
+                    WHEN rr.role IS NOT NULL THEN rr.role
+                    ELSE 'guest'
+                END as room_role
             FROM room_participants rp
             JOIN users u ON rp.user_id = u.id
+            JOIN rooms r ON r.id = rp.room_id
+            LEFT JOIN room_roles rr ON rr.room_id = rp.room_id AND rr.user_id = u.id
             WHERE rp.room_id = ?
         `, [parseInt(req.params.id)]);
 

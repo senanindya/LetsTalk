@@ -187,6 +187,38 @@ const SocketClient = {
             }
             RoomView.hideScreenShare();
         });
+
+        // Room moderation events
+        this.socket.on('room-role-update', ({ userId, role }) => {
+            const p = RoomView.participants.find(p => p.id === userId);
+            if (p) {
+                p.room_role = role;
+                RoomView.updateParticipants(RoomView.participants);
+            }
+        });
+        this.socket.on('user-kicked', ({ userId }) => {
+            RoomView.participants = RoomView.participants.filter(p => p.id !== userId);
+            RoomView.updateParticipants(RoomView.participants);
+        });
+        this.socket.on('you-were-kicked', ({ byUsername }) => {
+            showNotification(`⛔ You were kicked by ${byUsername}`);
+            exitRoomView();
+        });
+        this.socket.on('you-were-muted', ({ muted, byUsername }) => {
+            if (muted && Voice.isInVoice && !Voice.isMuted) {
+                Voice.toggleMute();
+                showNotification(`🔇 ${byUsername} muted you`);
+            }
+        });
+        this.socket.on('user-muted', ({ userId, muted }) => {
+            const p = RoomView.participants.find(p => p.id === userId);
+            if (p) { p._muted = muted; }
+        });
+
+        // DM events
+        this.socket.on('dm-message', (payload) => DM.onIncoming(payload));
+        this.socket.on('dm-message-sent', (payload) => DM.onSent(payload));
+        this.socket.on('dm-typing', ({ fromUsername }) => DM.showTyping(fromUsername));
     },
 
     joinRoom(roomId) { if (!this.socket) return; this.currentRoomId = roomId; this.socket.emit('join-room', roomId); },
@@ -768,18 +800,23 @@ const RoomView = {
         const membersList = document.getElementById('rv-members-list');
         if (!grid) return;
 
+        const myRole = Moderation.getMyRole();
+
         if (participants.length === 0) {
             grid.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">No one is here yet. You\'re the first!</p>';
         } else {
             grid.innerHTML = participants.map(p => {
-                const isOwner = this.room && p.id === this.room.creator_id;
+                const role = p.room_role || (this.room && p.id === this.room.creator_id ? 'owner' : 'guest');
                 const isYou = p.id === Auth.user?.id;
                 const isMuted = isYou && Voice.isMuted;
                 const avatarContent = p.avatar_url
                     ? `<img src="${escapeHtml(p.avatar_url)}" alt="${escapeHtml(p.username)}" class="rv-p-avatar-img" referrerpolicy="no-referrer">`
                     : (p.username || 'U')[0].toUpperCase();
+                const roleBadge = role === 'owner' ? '<span class="role-badge owner">👑 Owner</span>'
+                    : role === 'co-owner' ? '<span class="role-badge co-owner">⭐ Co-owner</span>'
+                    : '';
                 return `
-                <div class="rv-participant" data-user-id="${p.id}">
+                <div class="rv-participant" data-user-id="${p.id}" data-username="${escapeHtml(p.username)}" data-role="${role}">
                     <div class="rv-p-avatar-wrap">
                         <div class="rv-p-avatar" style="background:${p.avatar_color || '#6366f1'}" data-uid="${p.id}">
                             ${avatarContent}
@@ -790,27 +827,60 @@ const RoomView = {
                         ${isMuted ? '<div class="rv-p-mute-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/></svg></div>' : ''}
                     </div>
                     <span class="rv-p-name">${escapeHtml(p.username || 'User')}</span>
-                    ${isOwner ? '<span class="rv-p-role">👑 Owner</span>' : ''}
+                    ${roleBadge}
                 </div>`;
             }).join('');
+
+            // Add right-click context menus on participant cards
+            grid.querySelectorAll('.rv-participant').forEach(card => {
+                card.addEventListener('contextmenu', e => {
+                    e.preventDefault();
+                    const userId = parseInt(card.dataset.userId);
+                    const role = card.dataset.role;
+                    const username = card.dataset.username;
+                    if (userId === Auth.user?.id) return;
+                    Moderation.showContextMenu(e.clientX, e.clientY, userId, username, role);
+                });
+                // Also long-press on avatar for mobile / quick profile view on click
+                card.addEventListener('click', e => {
+                    const userId = parseInt(card.dataset.userId);
+                    if (userId !== Auth.user?.id) UserProfile.open(userId);
+                });
+            });
         }
 
         // Update members list tab
         if (membersList) {
             membersList.innerHTML = participants.map(p => {
-                const isOwner = this.room && p.id === this.room.creator_id;
+                const role = p.room_role || (this.room && p.id === this.room.creator_id ? 'owner' : 'guest');
                 const memberAvatarContent = p.avatar_url
                     ? `<img src="${escapeHtml(p.avatar_url)}" alt="${escapeHtml(p.username)}" class="rv-member-avatar-img" referrerpolicy="no-referrer">`
                     : (p.username||'U')[0].toUpperCase();
+                const roleLabel = role === 'owner' ? '<span class="role-badge owner rv-member-role">👑 Owner</span>'
+                    : role === 'co-owner' ? '<span class="role-badge co-owner rv-member-role">⭐ Co-owner</span>'
+                    : '<span class="role-badge guest rv-member-role">Guest</span>';
                 return `
-                <div class="rv-member-item">
+                <div class="rv-member-item" data-user-id="${p.id}" data-role="${role}" data-username="${escapeHtml(p.username)}" style="cursor:pointer;">
                     <div class="rv-member-avatar" style="background:${p.avatar_color || '#6366f1'}">${memberAvatarContent}</div>
                     <div class="rv-member-info">
                         <div class="rv-member-name">${escapeHtml(p.username||'User')}</div>
-                        ${isOwner ? '<div class="rv-member-role">👑 Owner</div>' : ''}
+                        ${roleLabel}
                     </div>
                 </div>`;
             }).join('');
+
+            membersList.querySelectorAll('.rv-member-item').forEach(item => {
+                item.addEventListener('click', e => {
+                    const userId = parseInt(item.dataset.userId);
+                    if (userId !== Auth.user?.id) UserProfile.open(userId);
+                });
+                item.addEventListener('contextmenu', e => {
+                    e.preventDefault();
+                    const userId = parseInt(item.dataset.userId);
+                    if (userId === Auth.user?.id) return;
+                    Moderation.showContextMenu(e.clientX, e.clientY, userId, item.dataset.username, item.dataset.role);
+                });
+            });
         }
     },
 
@@ -1736,13 +1806,83 @@ function setupEventListeners() {
         themeBtn.addEventListener('click', () => {
             const currentTheme = document.documentElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
-            
             updateThemeIcon();
         });
     }
+
+    // ---- Social Panel ----
+    document.getElementById('nav-social-btn')?.addEventListener('click', () => Social.open());
+    document.getElementById('social-panel-close')?.addEventListener('click', () => Social.close());
+    document.getElementById('social-panel-overlay')?.addEventListener('click', () => Social.close());
+
+    document.querySelectorAll('.sp-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            Social.switchTab(tab.dataset.sptab);
+            if (tab.dataset.sptab === 'dms') {
+                // collapse DM conversation if open and refresh list
+                DM.closeConversation();
+                Social.renderDMList();
+            }
+        });
+    });
+
+    // ---- DM Panel ----
+    document.getElementById('sp-dm-back')?.addEventListener('click', () => DM.closeConversation());
+    document.getElementById('sp-dm-send')?.addEventListener('click', () => DM.send());
+    document.getElementById('sp-dm-input')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') DM.send();
+        else {
+            if (DM.activePartnerId && SocketClient.socket) {
+                SocketClient.socket.emit('dm-typing', { receiverId: DM.activePartnerId });
+            }
+        }
+    });
+
+    // ---- User Profile Modal ----
+    document.getElementById('user-profile-modal-close')?.addEventListener('click', () => {
+        document.getElementById('user-profile-modal').classList.remove('open');
+    });
+    document.getElementById('user-profile-modal')?.addEventListener('click', e => {
+        if (e.target === document.getElementById('user-profile-modal')) {
+            document.getElementById('user-profile-modal').classList.remove('open');
+        }
+    });
+
+    // ---- Context Menu (Moderation) ----
+    document.getElementById('ctx-view-profile')?.addEventListener('click', () => {
+        const t = Moderation._currentTarget;
+        if (t) UserProfile.open(t.userId);
+        Moderation.hideContextMenu();
+    });
+    document.getElementById('ctx-dm')?.addEventListener('click', () => {
+        const t = Moderation._currentTarget;
+        if (t) { Social.open(); Social.switchTab('dms'); DM.openConversation(t.userId, t.username); }
+        Moderation.hideContextMenu();
+    });
+    document.getElementById('ctx-make-coowner')?.addEventListener('click', () => {
+        Moderation.assignRole('co-owner');
+        Moderation.hideContextMenu();
+    });
+    document.getElementById('ctx-remove-coowner')?.addEventListener('click', () => {
+        Moderation.assignRole('guest');
+        Moderation.hideContextMenu();
+    });
+    document.getElementById('ctx-mute')?.addEventListener('click', () => {
+        Moderation.mute();
+        Moderation.hideContextMenu();
+    });
+    document.getElementById('ctx-kick')?.addEventListener('click', () => {
+        Moderation.kick();
+        Moderation.hideContextMenu();
+    });
+
+    // Dismiss context menu on outside click
+    document.addEventListener('click', e => {
+        const menu = document.getElementById('ctx-menu');
+        if (menu && !menu.contains(e.target)) Moderation.hideContextMenu();
+    });
 }
 
 // ===============================================
@@ -2337,6 +2477,425 @@ const TodoApp = {
 };
 
 window.TodoApp = TodoApp;
+
+// ==========================================
+// SOCIAL MODULE
+// ==========================================
+const Social = {
+    data: { followers: [], following: [], blocks: [] },
+    loaded: false,
+
+    async load() {
+        if (!Auth.isLoggedIn()) return;
+        try {
+            const res = await fetch('/api/social/me', { headers: Auth.getHeaders() });
+            const d = await res.json();
+            if (res.ok) {
+                this.data = d;
+                this.loaded = true;
+                this.renderPanel();
+            }
+        } catch (e) { console.error('Social load error', e); }
+    },
+
+    async follow(userId) {
+        const res = await fetch(`/api/social/follow/${userId}`, { method: 'POST', headers: Auth.getHeaders() });
+        if (res.ok) { await this.load(); return true; }
+        return false;
+    },
+
+    async unfollow(userId) {
+        const res = await fetch(`/api/social/follow/${userId}`, { method: 'DELETE', headers: Auth.getHeaders() });
+        if (res.ok) { await this.load(); return true; }
+        return false;
+    },
+
+    async block(userId) {
+        const res = await fetch(`/api/social/block/${userId}`, { method: 'POST', headers: Auth.getHeaders() });
+        if (res.ok) { await this.load(); return true; }
+        return false;
+    },
+
+    async unblock(userId) {
+        const res = await fetch(`/api/social/block/${userId}`, { method: 'DELETE', headers: Auth.getHeaders() });
+        if (res.ok) { await this.load(); return true; }
+        return false;
+    },
+
+    isFollowing(userId) { return this.data.following?.some(u => u.id === userId) ?? false; },
+    isBlocked(userId) { return this.data.blocks?.includes(userId) ?? false; },
+
+    open() {
+        const panel = document.getElementById('social-panel');
+        const overlay = document.getElementById('social-panel-overlay');
+        if (!panel) return;
+        panel.classList.remove('hidden');
+        requestAnimationFrame(() => panel.classList.add('open'));
+        overlay.classList.remove('hidden');
+        if (!this.loaded) this.load();
+        else this.renderPanel();
+    },
+
+    close() {
+        const panel = document.getElementById('social-panel');
+        const overlay = document.getElementById('social-panel-overlay');
+        panel?.classList.remove('open');
+        overlay?.classList.add('hidden');
+        setTimeout(() => panel?.classList.add('hidden'), 280);
+    },
+
+    switchTab(tabName) {
+        document.querySelectorAll('.sp-tab').forEach(t => t.classList.toggle('active', t.dataset.sptab === tabName));
+        document.querySelectorAll('.sp-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(`sp-content-${tabName}`)?.classList.add('active');
+    },
+
+    renderPanel() {
+        const followers = this.data.followers || [];
+        const following = this.data.following || [];
+        const followingIds = new Set(following.map(u => u.id));
+        const followerIds = new Set(followers.map(u => u.id));
+        const friends = followers.filter(u => followingIds.has(u.id));
+
+        this._renderUserList('sp-followers-list', followers, 'No followers yet');
+        this._renderUserList('sp-following-list', following, 'Not following anyone');
+        this._renderUserList('sp-friends-list', friends, 'No mutual follows yet');
+    },
+
+    _renderUserList(containerId, users, emptyMsg) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        if (users.length === 0) { el.innerHTML = `<div class="sp-empty">${emptyMsg}</div>`; return; }
+        el.innerHTML = users.map(u => {
+            const avatarC = u.avatar_url
+                ? `<img src="${escapeHtml(u.avatar_url)}" referrerpolicy="no-referrer" alt="${escapeHtml(u.username)}">`
+                : (u.username || 'U')[0].toUpperCase();
+            return `<div class="sp-user-item" data-uid="${u.id}">
+                <div class="sp-user-avatar" style="background:${u.avatar_color||'#6366f1'}">${avatarC}</div>
+                <div class="sp-user-info"><div class="sp-user-name">${escapeHtml(u.username)}</div></div>
+                <div class="sp-user-actions">
+                    <button class="sp-action-btn" title="Message" data-uid="${u.id}" data-action="dm">💬</button>
+                    <button class="sp-action-btn" title="Profile" data-uid="${u.id}" data-action="profile">👤</button>
+                </div>
+            </div>`;
+        }).join('');
+        el.querySelectorAll('.sp-action-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                const uid = parseInt(btn.dataset.uid);
+                if (btn.dataset.action === 'dm') { DM.openConversation(uid, users.find(u => u.id === uid)?.username || ''); Social.switchTab('dms'); }
+                else if (btn.dataset.action === 'profile') UserProfile.open(uid);
+            });
+        });
+        el.querySelectorAll('.sp-user-item').forEach(item => {
+            item.addEventListener('click', e => {
+                if (e.target.closest('.sp-action-btn')) return;
+                UserProfile.open(parseInt(item.dataset.uid));
+            });
+        });
+    },
+
+    async renderDMList() {
+        const el = document.getElementById('sp-dm-list');
+        if (!el) return;
+        try {
+            const res = await fetch('/api/social/dms', { headers: Auth.getHeaders() });
+            const data = await res.json();
+            const convos = data.conversations || [];
+            if (convos.length === 0) { el.innerHTML = '<div class="sp-empty">No conversations yet</div>'; return; }
+            el.innerHTML = convos.map(c => {
+                const avatarC = c.partner_avatar_url
+                    ? `<img src="${escapeHtml(c.partner_avatar_url)}" referrerpolicy="no-referrer" alt="${escapeHtml(c.partner_username)}">`
+                    : (c.partner_username || 'U')[0].toUpperCase();
+                const preview = c.last_sender_id === Auth.user?.id ? `You: ${c.last_message}` : c.last_message;
+                return `<div class="sp-dm-item" data-uid="${c.partner_id}" data-username="${escapeHtml(c.partner_username)}">
+                    <div class="sp-user-avatar" style="background:${c.partner_avatar_color||'#6366f1'}">${avatarC}</div>
+                    <div class="sp-dm-info">
+                        <div class="sp-dm-name">${escapeHtml(c.partner_username)}</div>
+                        <div class="sp-dm-preview">${escapeHtml((preview||'').substring(0,50))}</div>
+                    </div>
+                </div>`;
+            }).join('');
+            el.querySelectorAll('.sp-dm-item').forEach(item => {
+                item.addEventListener('click', () => DM.openConversation(parseInt(item.dataset.uid), item.dataset.username));
+            });
+        } catch(e) { el.innerHTML = '<div class="sp-empty">Error loading DMs</div>'; }
+    }
+};
+
+// ==========================================
+// DIRECT MESSAGES MODULE
+// ==========================================
+const DM = {
+    activePartnerId: null,
+    activePartnerName: null,
+    typingTimer: null,
+
+    openConversation(userId, username) {
+        this.activePartnerId = userId;
+        this.activePartnerName = username;
+
+        document.getElementById('sp-dm-partner-name').textContent = username;
+        document.getElementById('sp-dm-convo').classList.remove('hidden');
+        document.querySelectorAll('.sp-content').forEach(c => c.classList.remove('active'));
+
+        this.loadHistory(userId);
+        document.getElementById('sp-dm-input')?.focus();
+    },
+
+    closeConversation() {
+        this.activePartnerId = null;
+        document.getElementById('sp-dm-convo').classList.add('hidden');
+        Social.switchTab('dms');
+    },
+
+    async loadHistory(userId) {
+        const container = document.getElementById('sp-dm-messages');
+        if (!container) return;
+        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;">Loading…</div>';
+        try {
+            const res = await fetch(`/api/social/dms/${userId}`, { headers: Auth.getHeaders() });
+            if (!res.ok) { container.innerHTML = '<div style="color:var(--rose);text-align:center;padding:1rem;">Blocked or unavailable</div>'; return; }
+            const data = await res.json();
+            container.innerHTML = '';
+            (data.messages || []).forEach(m => this._appendMsg(m.content, m.sender_id === Auth.user?.id));
+            container.scrollTop = container.scrollHeight;
+        } catch(e) { container.innerHTML = '<div style="color:var(--rose);text-align:center;padding:1rem;">Error loading messages</div>'; }
+    },
+
+    send() {
+        const input = document.getElementById('sp-dm-input');
+        const content = input?.value.trim();
+        if (!content || !this.activePartnerId || !SocketClient.socket) return;
+        SocketClient.socket.emit('dm-send', { receiverId: this.activePartnerId, content });
+        input.value = '';
+    },
+
+    onSent(payload) {
+        if (payload.from !== Auth.user?.id) return; // Only echo for current user
+        this._appendMsg(payload.content, true);
+    },
+
+    onIncoming(payload) {
+        if (this.activePartnerId === payload.from) {
+            this._appendMsg(payload.content, false);
+        } else {
+            // Notification for DM from other conversations
+            showNotification(`💬 ${payload.fromUsername}: ${payload.content.substring(0, 40)}`);
+        }
+    },
+
+    showTyping(fromUsername) {
+        if (!this.activePartnerId) return;
+        const el = document.getElementById('sp-dm-typing');
+        if (!el) return;
+        el.textContent = `${fromUsername} is typing…`;
+        clearTimeout(this.typingTimer);
+        this.typingTimer = setTimeout(() => { el.textContent = ''; }, 2500);
+    },
+
+    _appendMsg(content, isMine) {
+        const container = document.getElementById('sp-dm-messages');
+        if (!container) return;
+        const div = document.createElement('div');
+        div.className = `dm-msg ${isMine ? 'mine' : 'theirs'}`;
+        div.textContent = content;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+};
+
+// ==========================================
+// USER PROFILE MODAL MODULE
+// ==========================================
+const UserProfile = {
+    currentUserId: null,
+    currentData: null,
+
+    async open(userId) {
+        if (!Auth.isLoggedIn()) { UI.openLoginModal(); return; }
+        this.currentUserId = userId;
+        document.getElementById('user-profile-modal').classList.add('open');
+
+        // Reset state
+        document.getElementById('up-avatar').textContent = '…';
+        document.getElementById('up-username').textContent = 'Loading…';
+        document.getElementById('up-bio').textContent = '';
+        document.getElementById('up-langs').textContent = '';
+        document.getElementById('up-followers-count').textContent = '0';
+        document.getElementById('up-following-count').textContent = '0';
+
+        try {
+            const res = await fetch(`/api/social/users/${userId}`, { headers: Auth.getHeaders() });
+            const data = await res.json();
+            if (!res.ok) { showNotification('⚠️ Could not load profile'); return; }
+            this.currentData = data;
+            this._render(data);
+        } catch(e) { showNotification('⚠️ Error loading profile'); }
+    },
+
+    _render({ user, isFollowing, isBlocked, isBlockedBy }) {
+        const avatarEl = document.getElementById('up-avatar');
+        if (user.avatar_url) {
+            avatarEl.innerHTML = `<img src="${escapeHtml(user.avatar_url)}" referrerpolicy="no-referrer" alt="${escapeHtml(user.username)}">`;
+        } else {
+            avatarEl.textContent = (user.username || 'U')[0].toUpperCase();
+            avatarEl.style.backgroundColor = user.avatar_color || '#6366f1';
+        }
+        document.getElementById('up-username').textContent = user.username;
+        document.getElementById('up-bio').textContent = user.bio || '';
+        const langs = [user.native_lang, user.learning_lang].filter(Boolean);
+        document.getElementById('up-langs').textContent = langs.length ? '🌐 ' + langs.map(l => l.charAt(0).toUpperCase() + l.slice(1)).join(' → ') : '';
+        document.getElementById('up-followers-count').textContent = user.followers_count || 0;
+        document.getElementById('up-following-count').textContent = user.following_count || 0;
+
+        const followBtn = document.getElementById('up-follow-btn');
+        const blockBtn = document.getElementById('up-block-btn');
+        const dmBtn = document.getElementById('up-dm-btn');
+        const actionsEl = document.getElementById('up-actions');
+        const blockedMsg = document.getElementById('up-blocked-msg');
+
+        if (isBlockedBy) {
+            actionsEl.classList.add('hidden');
+            blockedMsg.classList.remove('hidden');
+            blockedMsg.textContent = 'This user has blocked you.';
+            return;
+        }
+
+        actionsEl.classList.remove('hidden');
+        blockedMsg.classList.add('hidden');
+
+        followBtn.textContent = isFollowing ? 'Unfollow' : 'Follow';
+        followBtn.className = isFollowing ? 'btn btn-ghost' : 'btn btn-primary';
+        blockBtn.textContent = isBlocked ? 'Unblock' : 'Block';
+
+        // Re-attach handlers (clone to remove old listeners)
+        const newFollowBtn = followBtn.cloneNode(true);
+        const newBlockBtn = blockBtn.cloneNode(true);
+        const newDmBtn = dmBtn.cloneNode(true);
+        followBtn.replaceWith(newFollowBtn);
+        blockBtn.replaceWith(newBlockBtn);
+        dmBtn.replaceWith(newDmBtn);
+
+        newFollowBtn.addEventListener('click', async () => {
+            if (isFollowing) { await Social.unfollow(user.id); }
+            else { await Social.follow(user.id); }
+            this.open(user.id); // Refresh profile
+        });
+        newBlockBtn.addEventListener('click', async () => {
+            if (isBlocked) { await Social.unblock(user.id); }
+            else { if (confirm(`Block ${user.username}?`)) await Social.block(user.id); }
+            this.open(user.id);
+        });
+        newDmBtn.addEventListener('click', () => {
+            document.getElementById('user-profile-modal').classList.remove('open');
+            Social.open();
+            Social.switchTab('dms');
+            DM.openConversation(user.id, user.username);
+        });
+    }
+};
+
+// ==========================================
+// MODERATION MODULE
+// ==========================================
+const Moderation = {
+    _currentTarget: null,
+
+    getMyRole() {
+        if (!Auth.user || !RoomView.room) return 'guest';
+        if (RoomView.room.creator_id === Auth.user.id) return 'owner';
+        const me = RoomView.participants.find(p => p.id === Auth.user.id);
+        return me?.room_role || 'guest';
+    },
+
+    canActOn(targetRole) {
+        const myRole = this.getMyRole();
+        if (myRole === 'owner') return targetRole !== 'owner';
+        if (myRole === 'co-owner') return targetRole === 'guest';
+        return false;
+    },
+
+    showContextMenu(x, y, userId, username, targetRole) {
+        const myRole = this.getMyRole();
+        const canAct = this.canActOn(targetRole);
+        this._currentTarget = { userId, username, targetRole };
+
+        const menu = document.getElementById('ctx-menu');
+
+        // Show/hide mod actions based on role permission
+        document.getElementById('ctx-make-coowner').style.display = (myRole === 'owner' && targetRole === 'guest') ? 'block' : 'none';
+        document.getElementById('ctx-remove-coowner').style.display = (myRole === 'owner' && targetRole === 'co-owner') ? 'block' : 'none';
+        document.getElementById('ctx-mute').style.display = canAct ? 'block' : 'none';
+        document.getElementById('ctx-kick').style.display = canAct ? 'block' : 'none';
+
+        // Position
+        menu.classList.remove('hidden');
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const mw = 175, mh = menu.offsetHeight || 200;
+        menu.style.left = Math.min(x, vw - mw - 8) + 'px';
+        menu.style.top = Math.min(y, vh - mh - 8) + 'px';
+    },
+
+    hideContextMenu() {
+        document.getElementById('ctx-menu')?.classList.add('hidden');
+    },
+
+    async assignRole(role) {
+        const t = this._currentTarget;
+        if (!t || !RoomView.room) return;
+        try {
+            const res = await fetch(`/api/rooms/${RoomView.room.id}/roles`, {
+                method: 'POST',
+                headers: Auth.getHeaders(),
+                body: JSON.stringify({ userId: t.userId, role })
+            });
+            if (res.ok) {
+                SocketClient.socket.emit('room-role-update', {
+                    roomId: RoomView.room.id,
+                    targetUserId: t.userId,
+                    role
+                });
+                showNotification(`✅ ${t.username} is now ${role}`);
+            } else {
+                const d = await res.json();
+                showNotification(`⚠️ ${d.error}`);
+            }
+        } catch(e) { showNotification('⚠️ Failed to assign role'); }
+    },
+
+    kick(targetSocketId) {
+        const t = this._currentTarget;
+        if (!t || !RoomView.room || !SocketClient.socket) return;
+        if (!this.canActOn(t.targetRole)) { showNotification('⛔ No permission'); return; }
+        // Find target socket ID from voice peers
+        let foundSocketId = targetSocketId;
+        if (!foundSocketId) {
+            for (const [sid, peer] of Voice.peers) {
+                const p = RoomView.participants.find(p => p.username === peer.username);
+                if (p && p.id === t.userId) { foundSocketId = sid; break; }
+            }
+        }
+        SocketClient.socket.emit('room-kick', {
+            roomId: RoomView.room.id,
+            targetSocketId: foundSocketId,
+            targetUserId: t.userId
+        });
+        showNotification(`🚫 Kicked ${t.username}`);
+    },
+
+    mute() {
+        const t = this._currentTarget;
+        if (!t || !RoomView.room || !SocketClient.socket) return;
+        if (!this.canActOn(t.targetRole)) { showNotification('⛔ No permission'); return; }
+        SocketClient.socket.emit('room-mute', {
+            roomId: RoomView.room.id,
+            targetUserId: t.userId,
+            muted: true
+        });
+        showNotification(`🔇 Muted ${t.username}`);
+    }
+};
 
 // ==========================================
 // INIT

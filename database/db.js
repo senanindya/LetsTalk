@@ -71,6 +71,57 @@ async function initDb() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_participants_room ON room_participants(room_id)');
 
+    // Room role assignments
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS room_roles (
+            room_id  INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+            user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            role     TEXT NOT NULL DEFAULT 'guest',
+            PRIMARY KEY (room_id, user_id)
+        )
+    `);
+
+    // Social: follows
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS follows (
+            follower_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (follower_id, following_id)
+        )
+    `);
+
+    // Social: blocks
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS blocks (
+            blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (blocker_id, blocked_id)
+        )
+    `);
+
+    // Direct messages
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS direct_messages (
+            id          SERIAL PRIMARY KEY,
+            sender_id   INTEGER NOT NULL REFERENCES users(id),
+            receiver_id INTEGER NOT NULL REFERENCES users(id),
+            content     TEXT NOT NULL,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Add social count columns to users (idempotent)
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0');
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS following_count INTEGER DEFAULT 0');
+
+    // Indexes
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_dm_sender ON direct_messages(sender_id, receiver_id, created_at)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_dm_receiver ON direct_messages(receiver_id, created_at)');
+
     return pool;
 }
 

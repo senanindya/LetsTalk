@@ -35,6 +35,9 @@
             </div>
             <!-- Logged-in nav -->
             <div class="nav-actions nav-actions-user hidden" id="nav-actions-user">
+                <button class="nav-social-btn" id="nav-social-btn" title="Social" aria-label="Social Panel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </button>
                 <div class="nav-user-trigger" id="nav-user-trigger">
                     <div class="nav-user-avatar" id="nav-user-avatar">U</div>
                     <span class="nav-username" id="nav-username">User</span>
@@ -806,6 +809,93 @@
                 <button type="submit" class="btn btn-primary btn-full">Save Changes</button>
             </form>
         </div>
+    </div>
+
+    <!-- ========== SOCIAL PANEL DRAWER ========== -->
+    <div class="social-panel hidden" id="social-panel">
+        <div class="social-panel-header">
+            <div class="social-panel-tabs">
+                <button class="sp-tab active" data-sptab="followers" id="sp-tab-followers">Followers</button>
+                <button class="sp-tab" data-sptab="following" id="sp-tab-following">Following</button>
+                <button class="sp-tab" data-sptab="friends" id="sp-tab-friends">Friends</button>
+                <button class="sp-tab" data-sptab="dms" id="sp-tab-dms">Messages</button>
+            </div>
+            <button class="social-panel-close" id="social-panel-close" title="Close">&times;</button>
+        </div>
+        <!-- Tab: Followers -->
+        <div class="sp-content active" id="sp-content-followers">
+            <div class="sp-user-list" id="sp-followers-list"><div class="sp-empty">No followers yet</div></div>
+        </div>
+        <!-- Tab: Following -->
+        <div class="sp-content" id="sp-content-following">
+            <div class="sp-user-list" id="sp-following-list"><div class="sp-empty">Not following anyone</div></div>
+        </div>
+        <!-- Tab: Friends (mutual follows) -->
+        <div class="sp-content" id="sp-content-friends">
+            <div class="sp-user-list" id="sp-friends-list"><div class="sp-empty">No mutual follows yet</div></div>
+        </div>
+        <!-- Tab: DMs -->
+        <div class="sp-content" id="sp-content-dms">
+            <div class="sp-dm-list" id="sp-dm-list"><div class="sp-empty">No conversations yet</div></div>
+        </div>
+        <!-- DM Conversation View -->
+        <div class="sp-dm-convo hidden" id="sp-dm-convo">
+            <div class="sp-dm-convo-header">
+                <button class="sp-dm-back" id="sp-dm-back">← Back</button>
+                <span class="sp-dm-partner-name" id="sp-dm-partner-name">User</span>
+            </div>
+            <div class="sp-dm-messages" id="sp-dm-messages"></div>
+            <div class="sp-dm-typing" id="sp-dm-typing"></div>
+            <div class="sp-dm-input-row">
+                <input type="text" id="sp-dm-input" placeholder="Send a message..." autocomplete="off">
+                <button class="sp-dm-send" id="sp-dm-send">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="social-panel-overlay hidden" id="social-panel-overlay"></div>
+
+    <!-- ========== USER PROFILE MODAL ========== -->
+    <div class="modal-overlay" id="user-profile-modal">
+        <div class="modal user-profile-modal-inner">
+            <button class="modal-close" id="user-profile-modal-close">&times;</button>
+            <div class="up-header">
+                <div class="up-avatar" id="up-avatar">U</div>
+                <div class="up-info">
+                    <div class="up-username" id="up-username">Username</div>
+                    <div class="up-bio" id="up-bio"></div>
+                    <div class="up-langs" id="up-langs"></div>
+                </div>
+            </div>
+            <div class="up-stats">
+                <div class="up-stat">
+                    <span class="up-stat-val" id="up-followers-count">0</span>
+                    <span class="up-stat-label">Followers</span>
+                </div>
+                <div class="up-stat">
+                    <span class="up-stat-val" id="up-following-count">0</span>
+                    <span class="up-stat-label">Following</span>
+                </div>
+            </div>
+            <div class="up-actions" id="up-actions">
+                <button class="btn btn-primary" id="up-follow-btn">Follow</button>
+                <button class="btn btn-secondary" id="up-dm-btn">💬 Message</button>
+                <button class="btn btn-ghost" id="up-block-btn">Block</button>
+            </div>
+            <div class="up-blocked-msg hidden" id="up-blocked-msg">You have blocked this user.</div>
+        </div>
+    </div>
+
+    <!-- ========== FLOATING CONTEXT MENU (Moderation) ========== -->
+    <div class="context-menu hidden" id="ctx-menu">
+        <div class="ctx-item" id="ctx-view-profile">👤 View Profile</div>
+        <div class="ctx-item" id="ctx-dm">💬 Send DM</div>
+        <div class="ctx-separator"></div>
+        <div class="ctx-item ctx-mod" id="ctx-make-coowner">⭐ Make Co-owner</div>
+        <div class="ctx-item ctx-mod" id="ctx-remove-coowner">↩ Remove Co-owner</div>
+        <div class="ctx-item ctx-mod" id="ctx-mute">🔇 Mute</div>
+        <div class="ctx-item ctx-mod ctx-danger" id="ctx-kick">🚫 Kick</div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

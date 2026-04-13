@@ -11,6 +11,7 @@ const { initDb, queryAll, queryOne, runSql, saveDb } = require('./database/db');
 
 const authRoutes = require('./routes/auth');
 const roomRoutes = require('./routes/rooms');
+const socialRoutes = require('./routes/social');
 
 // ==========================================
 // EXPRESS SETUP
@@ -25,6 +26,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/social', socialRoutes);
+
 
 // Public config endpoint (exposes non-secret config to frontend)
 app.get('/api/config', (req, res) => {
@@ -233,6 +236,9 @@ const io = new Server(server, {
 // Track voice peers per room: { roomId: Map<socketId, {userId, username}> }
 const voicePeers = {};
 
+// Map userId → socketId for DM routing
+const userSocketMap = new Map();
+
 // Authenticate socket connections
 io.use((socket, next) => {
     const token = socket.handshake.auth.token;
@@ -257,6 +263,9 @@ io.on('connection', (socket) => {
     }
 
     console.log(`✓ ${socket.user.username} connected (socket ${socket.id})`);
+
+    // Track for DM routing
+    userSocketMap.set(socket.user.id, socket.id);
 
     // ------------------------------------------
     // JOIN ROOM
@@ -475,10 +484,88 @@ io.on('connection', (socket) => {
     });
 
     // ------------------------------------------
+    // ROOM MODERATION (kick / mute / role-update)
+    // ------------------------------------------
+    socket.on('room-kick', ({ roomId, targetSocketId, targetUserId }) => {
+        if (!roomId) return;
+        // Server just relays — permission check is enforced at API level before this fires
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (targetSocket) {
+            targetSocket.emit('you-were-kicked', {
+                roomId,
+                byUsername: socket.user.username
+            });
+            targetSocket.leave(`room-${roomId}`);
+        }
+        io.to(`room-${roomId}`).emit('user-kicked', {
+            userId: targetUserId,
+            byUsername: socket.user.username
+        });
+    });
+
+    socket.on('room-mute', ({ roomId, targetUserId, muted }) => {
+        if (!roomId) return;
+        // Broadcast mute state to the room
+        io.to(`room-${roomId}`).emit('user-muted', {
+            userId: targetUserId,
+            muted,
+            byUsername: socket.user.username
+        });
+        // Also notify target directly
+        const targetSocketId = userSocketMap.get(targetUserId);
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('you-were-muted', { muted, byUsername: socket.user.username });
+        }
+    });
+
+    socket.on('room-role-update', ({ roomId, targetUserId, role }) => {
+        if (!roomId) return;
+        io.to(`room-${roomId}`).emit('room-role-update', {
+            userId: targetUserId,
+            role,
+            byUsername: socket.user.username
+        });
+    });
+
+    // ------------------------------------------
+    // DIRECT MESSAGES (real-time relay)
+    // ------------------------------------------
+    socket.on('dm-send', async ({ receiverId, content }) => {
+        if (!content || !receiverId) return;
+        const targetSocketId = userSocketMap.get(receiverId);
+        const payload = {
+            from: socket.user.id,
+            fromUsername: socket.user.username,
+            content,
+            time: new Date().toISOString()
+        };
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('dm-message', payload);
+        }
+        // Echo back to sender for confirmation
+        socket.emit('dm-message-sent', payload);
+    });
+
+    socket.on('dm-typing', ({ receiverId }) => {
+        const targetSocketId = userSocketMap.get(receiverId);
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('dm-typing', {
+                from: socket.user.id,
+                fromUsername: socket.user.username
+            });
+        }
+    });
+
+    // ------------------------------------------
     // DISCONNECT
     // ------------------------------------------
     socket.on('disconnect', async () => {
         console.log(`✗ ${socket.user.username} disconnected`);
+
+        // Clean up DM routing map
+        if (userSocketMap.get(socket.user.id) === socket.id) {
+            userSocketMap.delete(socket.user.id);
+        }
 
         // Clean up voice peers
         for (const roomIdStr of Object.keys(voicePeers)) {
