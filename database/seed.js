@@ -33,7 +33,7 @@ async function seed() {
         { username: 'Minji', email: 'minji@demo.com', lang: 'korean', color: '#a855f7' },
         { username: 'Alex', email: 'alex@demo.com', lang: 'english', color: '#06b6d4' },
         { username: 'Hans', email: 'hans@demo.com', lang: 'german', color: '#f59e0b' },
-        { username: 'Fatima', email: 'fatima@demo.com', lang: 'arabic', color: '#22c55e' },
+        { username: 'Fatima', email: 'fatima@demo.com', lang: 'english', color: '#22c55e' },
         { username: 'Priya', email: 'priya@demo.com', lang: 'hindi', color: '#6366f1' },
         { username: 'Wei', email: 'wei@demo.com', lang: 'chinese', color: '#f43f5e' },
         { username: 'Lucas', email: 'lucas@demo.com', lang: 'portuguese', color: '#22c55e' },

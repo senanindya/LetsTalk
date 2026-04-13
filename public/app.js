@@ -140,6 +140,19 @@ const SocketClient = {
             console.log('✓ Socket connected');
             document.getElementById('connection-status')?.classList.add('hidden');
         });
+
+        // Initialize Audio Context on first interaction to allow sounds
+        const initAudio = () => { SoundEffects.init(); document.removeEventListener('click', initAudio); };
+        document.addEventListener('click', initAudio);
+
+        this.socket.on('app-sync', (data) => {
+            if (data.action === 'open') {
+                RoomView.openApp(data.app, false); // Don't re-sync back
+            }
+            if (data.app === 'voice') {
+                Voice.onScreenShareSync(data);
+            }
+        });
         this.socket.on('disconnect', () => {
             const s = document.getElementById('connection-status');
             if (s) { s.classList.remove('hidden'); s.querySelector('.connection-text').textContent = 'Reconnecting...'; }
@@ -153,12 +166,18 @@ const SocketClient = {
         this.socket.on('new-message', msg => RoomView.appendMessage(msg));
         this.socket.on('user-joined', ({ user, participants, participantCount }) => {
             RoomView.updateParticipants(participants);
-            if (user.id !== Auth.user?.id) RoomView.appendSystemMessage(`${user.username} joined the room`);
+            if (user.id !== Auth.user?.id) {
+                RoomView.appendSystemMessage(`${user.username} joined the room`);
+                SoundEffects.playJoin();
+            }
             Rooms.loadRooms();
         });
         this.socket.on('user-left', ({ user, participants, participantCount }) => {
             RoomView.updateParticipants(participants);
-            if (user.id !== Auth.user?.id) RoomView.appendSystemMessage(`${user.username} left the room`);
+            if (user.id !== Auth.user?.id) {
+                RoomView.appendSystemMessage(`${user.username} left the room`);
+                SoundEffects.playLeave();
+            }
             Rooms.loadRooms();
         });
 
@@ -174,6 +193,48 @@ const SocketClient = {
     joinRoom(roomId) { if (!this.socket) return; this.currentRoomId = roomId; this.socket.emit('join-room', roomId); },
     leaveRoom(roomId) { if (!this.socket) return; this.socket.emit('leave-room', roomId); this.currentRoomId = null; },
     sendMessage(roomId, content) { if (!this.socket) return; this.socket.emit('send-message', { roomId, content }); },
+};
+
+// ==========================================
+// SOUND EFFECTS MODULE (Web Audio API)
+// ==========================================
+const SoundEffects = {
+    audioCtx: null,
+
+    init() {
+        if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+    },
+
+    playJoin() {
+        this.init();
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, this.audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, this.audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(this.audioCtx.destination);
+        osc.start();
+        osc.stop(this.audioCtx.currentTime + 0.3);
+    },
+
+    playLeave() {
+        this.init();
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(330, this.audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(110, this.audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(this.audioCtx.destination);
+        osc.start();
+        osc.stop(this.audioCtx.currentTime + 0.2);
+    }
 };
 
 // ==========================================
@@ -386,6 +447,15 @@ const Voice = {
                 }
                 this.isScreenSharing = true;
                 RoomView.showScreenShare(this.screenStream);
+                
+                // SIGNAL: Tell everyone else to show this stream
+                if (SocketClient.currentRoomId) {
+                    SocketClient.socket.emit('app-sync', {
+                        roomId: SocketClient.currentRoomId,
+                        app: 'voice',
+                        action: 'screen-start'
+                    });
+                }
                 showNotification('📺 Screen sharing started');
             } catch (err) {
                 if (err.name !== 'NotAllowedError') {
@@ -425,8 +495,36 @@ const Voice = {
         }
         this.isScreenSharing = false;
         RoomView.hideScreenShare();
+        
+        // SIGNAL: Tell everyone else to hide it
+        if (SocketClient.currentRoomId) {
+            SocketClient.socket.emit('app-sync', {
+                roomId: SocketClient.currentRoomId,
+                app: 'voice',
+                action: 'screen-stop'
+            });
+        }
+        
         this.updateToolbarUI();
         showNotification('📺 Screen sharing stopped');
+    },
+
+    onScreenShareSync(data) {
+        if (!data || !data.from) return;
+        
+        const peer = this.peers.get(data.from);
+        if (!peer) return;
+
+        if (data.action === 'screen-start') {
+            peer.isSharing = true;
+            if (peer.videoStream) {
+                RoomView.showScreenShare(peer.videoStream);
+                showNotification(`📺 ${peer.username} is sharing their screen`);
+            }
+        } else if (data.action === 'screen-stop') {
+            peer.isSharing = false;
+            RoomView.hideScreenShare();
+        }
     },
 
     updateToolbarUI() {
@@ -456,25 +554,56 @@ const Voice = {
         if (this.screenStream) this.screenStream.getTracks().forEach(track => pc.addTrack(track, this.screenStream));
         pc.ontrack = (event) => {
             const peer = this.peers.get(socketId);
-            if (peer) {
-                const stream = event.streams[0];
-                peer.stream = stream;
-                // Check if it has video
-                if (stream.getVideoTracks().length > 0) {
-                    RoomView.updatePeerVideo(socketId, stream);
-                }
+            if (!peer) return;
+
+            const stream = event.streams[0];
+            
+            if (event.track.kind === 'audio') {
+                peer.audioStream = stream;
+                
+                // Update audio visualizer
                 const participant = RoomView.participants.find(pt => pt.username === peer.username);
-                if (participant && stream.getAudioTracks().length > 0) {
+                if (participant) {
                     AudioVisualizer.attach(participant.id, stream);
                 }
-                // Audio
+                
+                // Update audio playback
                 let audio = document.getElementById(`audio-${socketId}`);
-                if (!audio) { audio = document.createElement('audio'); audio.id = `audio-${socketId}`; audio.autoplay = true; document.body.appendChild(audio); }
-                audio.srcObject = stream;
+                if (!audio) {
+                    audio = document.createElement('audio');
+                    audio.id = `audio-${socketId}`;
+                    audio.autoplay = true;
+                    document.body.appendChild(audio);
+                }
+                if (audio.srcObject !== stream) {
+                    audio.srcObject = stream;
+                }
             }
+
+            if (event.track.kind === 'video') {
+                peer.videoStream = stream;
+                if (peer.isSharing) {
+                    RoomView.showScreenShare(stream);
+                } else {
+                    RoomView.updatePeerVideo(socketId, stream);
+                }
+            }
+            
             RoomView.updateParticipantVoice();
         };
         pc.onicecandidate = (e) => { if (e.candidate) SocketClient.socket.emit('webrtc-ice-candidate', { to: socketId, candidate: e.candidate }); };
+        
+        // Handle renegotiation (Crucial for Screen Sharing visibility)
+        pc.onnegotiationneeded = async () => {
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                SocketClient.socket.emit('webrtc-offer', { to: socketId, offer });
+            } catch (err) {
+                console.error('Renegotiation error:', err);
+            }
+        };
+
         this.peers.set(socketId, { pc, stream: null, username });
         return pc;
     },
@@ -880,6 +1009,7 @@ const RoomView = {
     },
 
     showScreenShare(stream) {
+        document.getElementById('rv-participants-grid')?.classList.add('minimized');
         let container = document.getElementById('rv-screen-share-view');
         if (!container) {
             container = document.createElement('div');
@@ -898,6 +1028,7 @@ const RoomView = {
     },
 
     hideScreenShare() {
+        document.getElementById('rv-participants-grid')?.classList.remove('minimized');
         const container = document.getElementById('rv-screen-share-view');
         if (container) { container.innerHTML = ''; container.classList.add('hidden'); }
     },
@@ -911,6 +1042,60 @@ const RoomView = {
         el.style.left = `${Math.random() * 100 - 50}px`;
         container.appendChild(el);
         setTimeout(() => el.remove(), 2000);
+    },
+
+    openApp(appType, sync = false) {
+        // Broadcast app opening if requested
+        if (sync && SocketClient.currentRoomId) {
+            SocketClient.socket.emit('app-sync', { roomId: SocketClient.currentRoomId, app: appType, action: 'open' });
+        }
+
+        // Handle Main Stage Apps (Chess)
+        if (appType === 'chess') {
+            document.getElementById('rv-participants-grid').classList.add('minimized');
+            document.getElementById('ms-app-container').classList.remove('hidden');
+            document.getElementById('ms-app-chess').classList.remove('hidden');
+            document.getElementById('rv-app-view').classList.add('hidden'); // Close right panel if open
+            if (window.ChessApp) window.ChessApp.init();
+            return;
+        }
+
+        // Ensure we are on the apps tab
+        this.switchTab('apps');
+
+        // Handle Right Panel Apps (YouTube, etc)
+        document.getElementById('rv-apps-grid').classList.add('hidden');
+        const header = document.querySelector('.rv-apps-header');
+        if (header) header.classList.add('hidden');
+        document.getElementById('rv-app-view').classList.remove('hidden');
+        
+        document.querySelectorAll('#rv-app-view-content > div').forEach(div => div.classList.add('hidden'));
+
+        if (appType === 'youtube') {
+            document.getElementById('rv-app-view-title').textContent = 'YouTube';
+            document.getElementById('yt-app-container').classList.remove('hidden');
+            if (window.YouTubeApp) window.YouTubeApp.init();
+        } else if (appType === 'pomodoro') {
+            document.getElementById('rv-app-view-title').textContent = 'Focus Timer';
+            document.getElementById('pomo-app-container').classList.remove('hidden');
+            if (window.PomodoroApp) window.PomodoroApp.init();
+        } else if (appType === 'todo') {
+            document.getElementById('rv-app-view-title').textContent = 'Shared Tasks';
+            document.getElementById('todo-app-container').classList.remove('hidden');
+            if (window.TodoApp) window.TodoApp.init();
+        } else {
+            // Placeholder for other apps (Whiteboard, Document)
+            document.getElementById('rv-app-view-title').textContent = appType.charAt(0).toUpperCase() + appType.slice(1);
+            let placeholderObj = document.getElementById('placeholder-app-msg');
+            if(!placeholderObj){
+                placeholderObj = document.createElement('div');
+                placeholderObj.id = 'placeholder-app-msg';
+                placeholderObj.style.cssText = 'padding:2rem;text-align:center;color:var(--text-muted);';
+                document.getElementById('rv-app-view-content').appendChild(placeholderObj);
+            }
+            placeholderObj.textContent = `${appType.charAt(0).toUpperCase() + appType.slice(1)} is coming soon!`;
+            placeholderObj.classList.remove('hidden');
+        }
     }
 };
 
@@ -1578,51 +1763,10 @@ function setupEventListeners() {
     // Apps Interactivity
     document.querySelectorAll('.rv-app-card').forEach(card => {
         card.addEventListener('click', () => {
-            const appType = card.dataset.app;
-            
-            // Handle Main Stage Apps
-            if (appType === 'chess') {
-                document.getElementById('rv-participants-grid').classList.add('minimized');
-                document.getElementById('ms-app-container').classList.remove('hidden');
-                document.getElementById('ms-app-chess').classList.remove('hidden');
-                
-                if (window.ChessApp) window.ChessApp.init();
-                return; 
-            }
-
-            // Handle Right Panel Apps (YouTube, etc)
-            document.getElementById('rv-apps-grid').classList.add('hidden');
-            document.querySelector('.rv-apps-header').classList.add('hidden');
-            document.getElementById('rv-app-view').classList.remove('hidden');
-            
-            document.querySelectorAll('#rv-app-view-content > div').forEach(div => div.classList.add('hidden'));
-
-            if (appType === 'youtube') {
-                document.getElementById('rv-app-view-title').textContent = 'YouTube';
-                document.getElementById('yt-app-container').classList.remove('hidden');
-                if (window.YouTubeApp) window.YouTubeApp.init(); 
-            } else if (appType === 'pomodoro') {
-                document.getElementById('rv-app-view-title').textContent = 'Focus Timer';
-                document.getElementById('pomo-app-container').classList.remove('hidden');
-                if (window.PomodoroApp) window.PomodoroApp.init();
-            } else if (appType === 'todo') {
-                document.getElementById('rv-app-view-title').textContent = 'Shared Tasks';
-                document.getElementById('todo-app-container').classList.remove('hidden');
-                if (window.TodoApp) window.TodoApp.init();
-            } else {
-                document.getElementById('rv-app-view-title').textContent = appType.charAt(0).toUpperCase() + appType.slice(1);
-                let placeholderObj = document.getElementById('placeholder-app-msg');
-                if(!placeholderObj){
-                    placeholderObj = document.createElement('div');
-                    placeholderObj.id = 'placeholder-app-msg';
-                    placeholderObj.style.cssText = 'padding:2rem;text-align:center;color:var(--text-muted);';
-                    document.getElementById('rv-app-view-content').appendChild(placeholderObj);
-                }
-                placeholderObj.innerHTML = `<h3>${appType} is coming soon!</h3>`;
-                placeholderObj.classList.remove('hidden');
-            }
+            RoomView.openApp(card.dataset.app, true);
         });
     });
+
 
     document.getElementById('rv-app-back')?.addEventListener('click', () => {
         document.getElementById('rv-app-view').classList.add('hidden');
@@ -1706,8 +1850,10 @@ const ChessApp = {
         });
 
         if (SocketClient.socket) {
-            SocketClient.socket.on('yt-sync', (data) => {
-                this.renderAvailableTable(data);
+            SocketClient.socket.on('app-sync', (data) => {
+                if (data.app === 'chess') {
+                    this.renderAvailableTable(data.payload);
+                }
             });
         }
     },
@@ -1735,8 +1881,9 @@ const ChessApp = {
 
             if (data.challenge && data.challenge.url) {
                 if (SocketClient.currentRoomId) {
-                    SocketClient.socket.emit('yt-sync', {
+                    SocketClient.socket.emit('app-sync', {
                         roomId: SocketClient.currentRoomId, 
+                        app: 'chess',
                         action: 'chess-table', 
                         payload: {
                             url: data.challenge.url,
@@ -1840,8 +1987,15 @@ const YouTubeApp = {
         
         // Setup internal Socket Client for Sync (assumes SocketClient.socket exists)
         if (SocketClient.socket) {
-            SocketClient.socket.on('yt-sync', (data) => {
-                if (data.action === 'load') this.loadVideoLocal(data.payload);
+            SocketClient.socket.on('app-sync', (data) => {
+                if (data.app !== 'youtube') return;
+                
+                if (data.action === 'load') {
+                    this.loadVideoLocal(data.payload);
+                    // AUTO-SWITCH UI for participants
+                    RoomView.switchTab('apps');
+                    RoomView.openApp('youtube');
+                }
                 if (data.action === 'play') this.playLocal(data.payload);
                 if (data.action === 'pause') this.pauseLocal(data.payload);
                 if (data.action === 'stop') this.stopLocal();
@@ -1899,7 +2053,7 @@ const YouTubeApp = {
 
     loadVideo(videoId, sync = false) {
         if (sync && SocketClient.currentRoomId) {
-            SocketClient.socket.emit('yt-sync', { roomId: SocketClient.currentRoomId, action: 'load', payload: videoId });
+            SocketClient.socket.emit('app-sync', { roomId: SocketClient.currentRoomId, app: 'youtube', action: 'load', payload: videoId });
         }
         this.loadVideoLocal(videoId);
     },
@@ -1931,12 +2085,12 @@ const YouTubeApp = {
         if (state === window.YT.PlayerState.PLAYING) {
             this.player.pauseVideo();
             if (sync && SocketClient.currentRoomId) {
-                SocketClient.socket.emit('yt-sync', { roomId: SocketClient.currentRoomId, action: 'pause', payload: time });
+                SocketClient.socket.emit('app-sync', { roomId: SocketClient.currentRoomId, app: 'youtube', action: 'pause', payload: time });
             }
         } else {
             this.player.playVideo();
             if (sync && SocketClient.currentRoomId) {
-                SocketClient.socket.emit('yt-sync', { roomId: SocketClient.currentRoomId, action: 'play', payload: time });
+                SocketClient.socket.emit('app-sync', { roomId: SocketClient.currentRoomId, app: 'youtube', action: 'play', payload: time });
             }
         }
     },
@@ -1959,7 +2113,7 @@ const YouTubeApp = {
 
     stopVideo(sync = false) {
         if (sync && SocketClient.currentRoomId) {
-            SocketClient.socket.emit('yt-sync', { roomId: SocketClient.currentRoomId, action: 'stop' });
+            SocketClient.socket.emit('app-sync', { roomId: SocketClient.currentRoomId, app: 'youtube', action: 'stop' });
         }
         this.stopLocal();
     },
