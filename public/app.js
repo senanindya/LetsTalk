@@ -331,9 +331,27 @@ const Voice = {
     isInVoice: false,
     isCameraOn: false,
     isScreenSharing: false,
+    iceServers: null,
+
+    async fetchIceServers() {
+        if (this.iceServers) return; // already cached
+        try {
+            const res = await fetch('/api/ice-servers');
+            const data = await res.json();
+            this.iceServers = data.iceServers;
+            console.log('✓ ICE servers loaded:', this.iceServers.length, 'servers');
+        } catch (e) {
+            console.warn('Failed to fetch ICE servers, using STUN only:', e);
+            this.iceServers = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ];
+        }
+    },
 
     async joinVoice(roomId) {
         try {
+            await this.fetchIceServers();
             this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             this.isInVoice = true;
             this.isMuted = false;
@@ -536,30 +554,9 @@ const Voice = {
 
     createPeerConnection(socketId, username) {
         const pc = new RTCPeerConnection({
-            iceServers: [
+            iceServers: this.iceServers || [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun.relay.metered.ca:80' },
-                {
-                    urls: 'turn:global.relay.metered.ca:80',
-                    username: 'e8dd65b92f3b838bdcef29c8',
-                    credential: '5W4XLpIhxZlIhdqd'
-                },
-                {
-                    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-                    username: 'e8dd65b92f3b838bdcef29c8',
-                    credential: '5W4XLpIhxZlIhdqd'
-                },
-                {
-                    urls: 'turn:global.relay.metered.ca:443',
-                    username: 'e8dd65b92f3b838bdcef29c8',
-                    credential: '5W4XLpIhxZlIhdqd'
-                },
-                {
-                    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-                    username: 'e8dd65b92f3b838bdcef29c8',
-                    credential: '5W4XLpIhxZlIhdqd'
-                }
+                { urls: 'stun:stun1.l.google.com:19302' }
             ],
             iceCandidatePoolSize: 10
         });

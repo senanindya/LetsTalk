@@ -36,6 +36,56 @@ app.get('/api/config', (req, res) => {
     });
 });
 
+// ICE Servers endpoint — serves TURN credentials to the frontend
+// If METERED_API_KEY is set, fetches fresh credentials from Metered.ca (recommended for production)
+// Otherwise falls back to the Open Relay Project public free TURN servers
+app.get('/api/ice-servers', async (req, res) => {
+    const meteredApiKey = process.env.METERED_API_KEY;
+
+    if (meteredApiKey) {
+        try {
+            const response = await fetch(
+                `https://letstalk.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`
+            );
+            if (response.ok) {
+                const iceServers = await response.json();
+                return res.json({ iceServers });
+            }
+        } catch (e) {
+            console.warn('Metered TURN fetch failed, falling back to Open Relay:', e.message);
+        }
+    }
+
+    // Fallback: Open Relay Project (free public TURN servers, up to 500MB/month)
+    res.json({
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:openrelay.metered.ca:80' },
+            {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:80?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            }
+        ]
+    });
+});
+
 // GIF API Endpoint (Proxies Giphy)
 app.get('/api/gifs', async (req, res) => {
     try {
