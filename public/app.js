@@ -535,7 +535,34 @@ const Voice = {
     },
 
     createPeerConnection(socketId, username) {
-        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
+        const pc = new RTCPeerConnection({
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun.relay.metered.ca:80' },
+                {
+                    urls: 'turn:global.relay.metered.ca:80',
+                    username: 'e8dd65b92f3b838bdcef29c8',
+                    credential: '5W4XLpIhxZlIhdqd'
+                },
+                {
+                    urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+                    username: 'e8dd65b92f3b838bdcef29c8',
+                    credential: '5W4XLpIhxZlIhdqd'
+                },
+                {
+                    urls: 'turn:global.relay.metered.ca:443',
+                    username: 'e8dd65b92f3b838bdcef29c8',
+                    credential: '5W4XLpIhxZlIhdqd'
+                },
+                {
+                    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+                    username: 'e8dd65b92f3b838bdcef29c8',
+                    credential: '5W4XLpIhxZlIhdqd'
+                }
+            ],
+            iceCandidatePoolSize: 10
+        });
         if (this.localStream) this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream));
         if (this.screenStream) this.screenStream.getTracks().forEach(track => pc.addTrack(track, this.screenStream));
         pc.ontrack = (event) => {
