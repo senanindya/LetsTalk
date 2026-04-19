@@ -578,23 +578,34 @@ const Voice = {
             }
 
             if (track.kind === 'video') {
-                // Always store the latest video stream on the peer
                 peer.videoStream = stream;
-
                 if (peer.isScreenSharing) {
-                    // screen-share-started already arrived, show it now
                     RoomView.showScreenShare(stream, peer.username);
                 } else {
-                    // Either a camera stream OR screen-share-started hasn't arrived yet.
-                    // Store and let screen-share-started handler route it.
                     RoomView.updatePeerVideo(socketId, stream);
                 }
             }
             RoomView.updateParticipantVoice();
         };
 
-        pc.onicecandidate = (e) => { if (e.candidate) SocketClient.socket.emit('webrtc-ice-candidate', { to: socketId, candidate: e.candidate }); };
-        this.peers.set(socketId, { pc, stream: null, username });
+        // Log connection state changes — visible in browser DevTools console
+        pc.onconnectionstatechange = () => {
+            console.log(`[WebRTC] ${username} connection state: ${pc.connectionState}`);
+            if (pc.connectionState === 'failed') {
+                console.error(`[WebRTC] Connection FAILED for ${username} — ICE negotiation unsuccessful. Check TURN server.`);
+            }
+        };
+        pc.oniceconnectionstatechange = () => {
+            console.log(`[WebRTC] ${username} ICE state: ${pc.iceConnectionState}`);
+        };
+
+        pc.onicecandidate = (e) => {
+            if (e.candidate) SocketClient.socket.emit('webrtc-ice-candidate', { to: socketId, candidate: e.candidate });
+        };
+
+        // pendingCandidates queue: holds ICE candidates that arrived before
+        // setRemoteDescription — they are flushed in onOffer / onAnswer
+        this.peers.set(socketId, { pc, stream: null, username, pendingCandidates: [] });
         return pc;
     },
 
@@ -625,20 +636,54 @@ const Voice = {
 
     async onOffer({ from, offer, username }) {
         const pc = this.peers.has(from) ? this.peers.get(from).pc : this.createPeerConnection(from, username);
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        SocketClient.socket.emit('webrtc-answer', { to: from, answer });
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            // Flush any ICE candidates that arrived before the remote description was ready
+            const peer = this.peers.get(from);
+            if (peer && peer.pendingCandidates.length > 0) {
+                console.log(`[WebRTC] Flushing ${peer.pendingCandidates.length} queued ICE candidates for ${username}`);
+                for (const c of peer.pendingCandidates) {
+                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('[WebRTC] Queued candidate error:', e); }
+                }
+                peer.pendingCandidates = [];
+            }
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            SocketClient.socket.emit('webrtc-answer', { to: from, answer });
+        } catch(e) {
+            console.error('[WebRTC] onOffer error:', e);
+        }
     },
 
     async onAnswer({ from, answer }) {
         const peer = this.peers.get(from);
-        if (peer) await peer.pc.setRemoteDescription(new RTCSessionDescription(answer));
+        if (!peer) return;
+        try {
+            await peer.pc.setRemoteDescription(new RTCSessionDescription(answer));
+            // Flush any ICE candidates that arrived before the remote description was ready
+            if (peer.pendingCandidates.length > 0) {
+                console.log(`[WebRTC] Flushing ${peer.pendingCandidates.length} queued ICE candidates for ${peer.username}`);
+                for (const c of peer.pendingCandidates) {
+                    try { await peer.pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) { console.warn('[WebRTC] Queued candidate error:', e); }
+                }
+                peer.pendingCandidates = [];
+            }
+        } catch(e) {
+            console.error('[WebRTC] onAnswer error:', e);
+        }
     },
 
     async onIceCandidate({ from, candidate }) {
         const peer = this.peers.get(from);
-        if (peer) await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+        if (!peer || !candidate) return;
+        // If remote description not set yet, queue the candidate — this is the race condition fix
+        if (!peer.pc.remoteDescription || !peer.pc.remoteDescription.type) {
+            console.log(`[WebRTC] Queuing ICE candidate for ${peer.username} (remote description not ready yet)`);
+            peer.pendingCandidates.push(candidate);
+        } else {
+            try { await peer.pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+            catch(e) { console.warn('[WebRTC] addIceCandidate error:', e); }
+        }
     },
 
     cleanup() { this.leaveVoice(null); }

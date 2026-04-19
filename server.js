@@ -37,26 +37,33 @@ app.get('/api/config', (req, res) => {
 });
 
 // ICE Servers endpoint — serves TURN credentials to the frontend
-// If METERED_API_KEY is set, fetches fresh credentials from Metered.ca (recommended for production)
+// If METERED_API_KEY + METERED_APP_NAME are set, fetches fresh credentials from Metered.ca
 // Otherwise falls back to the Open Relay Project public free TURN servers
 app.get('/api/ice-servers', async (req, res) => {
     const meteredApiKey = process.env.METERED_API_KEY;
+    const meteredAppName = process.env.METERED_APP_NAME;
 
-    if (meteredApiKey) {
+    if (meteredApiKey && meteredAppName) {
         try {
-            const response = await fetch(
-                `https://letstalk.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`
-            );
+            const meteredUrl = `https://${meteredAppName}.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`;
+            console.log('Fetching TURN credentials from Metered:', meteredAppName);
+            const response = await fetch(meteredUrl);
             if (response.ok) {
                 const iceServers = await response.json();
+                console.log(`✓ Metered TURN: returned ${iceServers.length} ICE servers`);
                 return res.json({ iceServers });
+            } else {
+                console.warn('Metered TURN HTTP error:', response.status, await response.text());
             }
         } catch (e) {
             console.warn('Metered TURN fetch failed, falling back to Open Relay:', e.message);
         }
+    } else if (meteredApiKey && !meteredAppName) {
+        console.warn('METERED_API_KEY is set but METERED_APP_NAME is missing — falling back to Open Relay');
     }
 
-    // Fallback: Open Relay Project (free public TURN servers, up to 500MB/month)
+    // Fallback: Open Relay Project (free public TURN servers, ~500MB/month)
+    console.log('Using Open Relay Project TURN servers');
     res.json({
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
